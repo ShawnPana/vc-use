@@ -94,6 +94,7 @@ export default function App() {
   const analyzeStartup = useAction(api.actions.analyzeStartup);
   const seedDefaultAgents = useAction(api.actions.seedDefaultAgents);
   const addToPortfolioMutation = useMutation(api.mutations.addToPortfolio);
+  const removeFromPortfolioMutation = useMutation(api.mutations.removeFromPortfolio);
   const portfolioCompanies = useQuery(api.queries.getPortfolioCompanies);
 
   const handleAddToPortfolio = async () => {
@@ -109,6 +110,18 @@ export default function App() {
       });
     } catch (error) {
       console.error("Error adding to portfolio:", error);
+    }
+  };
+
+  const handleRemoveFromPortfolio = async () => {
+    if (!searchedStartup) return;
+
+    try {
+      await removeFromPortfolioMutation({
+        startupName: searchedStartup,
+      });
+    } catch (error) {
+      console.error("Error removing from portfolio:", error);
     }
   };
   const analyses = useQuery(
@@ -293,7 +306,16 @@ export default function App() {
                   key={example}
                   type="button"
                   className="search-example-button"
-                  onClick={() => setStartupName(example)}
+                  onClick={() => {
+                    setStartupName(example);
+                    setTimeout(() => {
+                      setSearchedStartup(example);
+                      setIsAnalyzing(true);
+                      analyzeStartup({ startupName: example })
+                        .catch((error) => console.error("Analysis error:", error))
+                        .finally(() => setIsAnalyzing(false));
+                    }, 100);
+                  }}
                 >
                   {example}
                 </button>
@@ -364,21 +386,41 @@ export default function App() {
                       </button>
                     )}
                     {isInPortfolio && (
-                      <div style={{
-                        background: "transparent",
-                        border: "1px solid #34d399",
-                        borderRadius: "0.5rem",
-                        padding: "0.4rem 0.75rem",
-                        color: "#34d399",
-                        fontSize: "0.85rem",
-                        fontWeight: 600,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.4rem",
-                      }}>
+                      <button
+                        onClick={() => void handleRemoveFromPortfolio()}
+                        style={{
+                          background: "transparent",
+                          border: "1px solid #34d399",
+                          borderRadius: "0.5rem",
+                          padding: "0.4rem 0.75rem",
+                          color: "#34d399",
+                          fontSize: "0.85rem",
+                          fontWeight: 600,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.4rem",
+                          cursor: "pointer",
+                          transition: "all 0.2s",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = "#ef4444";
+                          e.currentTarget.style.borderColor = "#ef4444";
+                          e.currentTarget.style.color = "white";
+                          const icon = e.currentTarget.querySelector("svg");
+                          const text = e.currentTarget.querySelector("span");
+                          if (text) text.textContent = "Remove from Portfolio";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "transparent";
+                          e.currentTarget.style.borderColor = "#34d399";
+                          e.currentTarget.style.color = "#34d399";
+                          const text = e.currentTarget.querySelector("span");
+                          if (text) text.textContent = "In Portfolio";
+                        }}
+                      >
                         <BookmarkCheck size={16} />
-                        In Portfolio
-                      </div>
+                        <span>In Portfolio</span>
+                      </button>
                     )}
                   </div>
                 </div>

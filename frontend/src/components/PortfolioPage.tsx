@@ -69,7 +69,6 @@ export function PortfolioPage({ onSelectCompany, onBack }: PortfolioPageProps) {
           padding: "6rem 2rem",
           color: "var(--color-muted-foreground)",
         }}>
-          <Bookmark size={80} style={{ opacity: 0.3, marginBottom: "2rem" }} />
           <h2 style={{ fontSize: "1.75rem", marginBottom: "0.75rem", fontWeight: 600 }}>
             No companies in portfolio yet
           </h2>
