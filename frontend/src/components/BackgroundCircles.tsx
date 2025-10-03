@@ -4,8 +4,8 @@ import { useTheme } from "@/hooks/useTheme";
 export function BackgroundCircles() {
   const { theme } = useTheme();
 
-  // Define colors based on theme
-  const borderColor = theme === "dark" ? "#262626" : "#e5e5e5";
+  // Define colors based on theme - made more visible
+  const borderColor = theme === "dark" ? "#404040" : "#d4d4d4";
 
   return (
     <div
@@ -26,8 +26,8 @@ export function BackgroundCircles() {
           position: "absolute",
           left: "50%",
           top: "50%",
-          marginLeft: "-200px",
-          marginTop: "-200px",
+          marginLeft: "-150px",
+          marginTop: "-150px",
         }}
         initial={{ scale: 0.8, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
@@ -35,10 +35,11 @@ export function BackgroundCircles() {
       >
         <div
           style={{
-            height: "400px",
-            width: "400px",
+            height: "300px",
+            width: "300px",
             borderRadius: "50%",
-            border: `1px solid ${borderColor}`,
+            border: `2px solid ${borderColor}`,
+            opacity: 0.8,
           }}
         />
       </motion.div>
@@ -61,8 +62,8 @@ export function BackgroundCircles() {
             height: "700px",
             width: "700px",
             borderRadius: "50%",
-            border: `1px solid ${borderColor}`,
-            opacity: 0.5,
+            border: `2px solid ${borderColor}`,
+            opacity: 0.7,
           }}
         />
       </motion.div>
@@ -85,8 +86,8 @@ export function BackgroundCircles() {
             height: "1000px",
             width: "1000px",
             borderRadius: "50%",
-            border: `1px solid ${borderColor}`,
-            opacity: 0.3,
+            border: `2px solid ${borderColor}`,
+            opacity: 0.5,
           }}
         />
       </motion.div>
@@ -108,8 +109,8 @@ export function BackgroundCircles() {
             height: "850px",
             width: "850px",
             borderRadius: "50%",
-            border: `1px dashed ${borderColor}`,
-            opacity: 0.2,
+            border: `2px dashed ${borderColor}`,
+            opacity: 0.6,
           }}
         />
       </motion.div>
