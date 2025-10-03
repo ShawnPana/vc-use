@@ -1,0 +1,2 @@
+browser_use_sdk
+python-dotenv
