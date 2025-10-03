@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { useTheme } from "@/contexts/ThemeContext";
+import { useTheme } from "@/hooks/useTheme";
 
 export function BackgroundCircles() {
   const { theme } = useTheme();

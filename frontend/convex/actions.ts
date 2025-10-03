@@ -4,6 +4,10 @@ import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
 
+const RATE_LIMIT_DELAY_MS = 500;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 // Agent configurations
 const AGENTS = [
   {
@@ -152,17 +156,20 @@ export const analyzeStartup = action({
 
     const scrapedDataString = JSON.stringify(scrapedData);
 
-    // Run all agents in parallel
-    const analysisPromises = AGENTS.map((agent) =>
-      ctx.runAction(api.actions.analyzeWithCerebras, {
-        startupName: args.startupName,
-        agentId: agent.id,
-        scrapedData: scrapedDataString,
-      })
-    );
-
-    // Wait for all analyses to complete
-    await Promise.allSettled(analysisPromises);
+    // Run agents sequentially to avoid hitting Cerebras rate limits
+    for (const [index, agent] of AGENTS.entries()) {
+      try {
+        await ctx.runAction(api.actions.analyzeWithCerebras, {
+          startupName: args.startupName,
+          agentId: agent.id,
+          scrapedData: scrapedDataString,
+        });
+      } finally {
+        if (index < AGENTS.length - 1) {
+          await sleep(RATE_LIMIT_DELAY_MS);
+        }
+      }
+    }
 
     // Generate summaries
     await ctx.runAction(api.actions.generateSummaries, {
