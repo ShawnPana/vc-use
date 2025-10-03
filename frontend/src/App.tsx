@@ -203,37 +203,6 @@ export default function App() {
                 </div>
               </div>
 
-              <form
-                className="dashboard__search"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void handleAnalyze();
-                }}
-              >
-                <div className="dashboard__search-field">
-                  <Search className="dashboard__search-icon" aria-hidden="true" />
-                  <input
-                    className="dashboard__search-input"
-                    type="text"
-                    value={startupName}
-                    onChange={(e) => setStartupName(e.target.value)}
-                    placeholder="Evaluate another startup"
-                    aria-label="Startup name"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        void handleAnalyze();
-                      }
-                    }}
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="dashboard__search-button"
-                  disabled={!startupName.trim() || isAnalyzing}
-                >
-                  {isAnalyzing ? "Analyzing" : "Run Analysis"}
-                </button>
-              </form>
             </article>
 
             <article className="dashboard__tile dashboard__tile--founder">

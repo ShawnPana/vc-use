@@ -57,7 +57,7 @@ export default function AgentCard({
         </div>
       </header>
 
-      <div>
+      <div className="agent-card__content">
         {status === "loading" && (
           <div className="skeleton-lines" aria-label="Agent analysis loading">
             <span className="skeleton-line" />
