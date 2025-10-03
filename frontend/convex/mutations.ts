@@ -236,3 +236,51 @@ export const seedAgentsIfEmpty = mutation({
     return { seeded: false, count: existingAgents.length };
   },
 });
+
+export const addToPortfolio = mutation({
+  args: {
+    startupName: v.string(),
+    website: v.optional(v.string()),
+    bio: v.optional(v.string()),
+    summary: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // Check if already in portfolio
+    const existing = await ctx.db
+      .query("portfolio")
+      .withIndex("by_startup", (q) => q.eq("startupName", args.startupName))
+      .first();
+
+    if (existing) {
+      throw new Error("Company already in portfolio");
+    }
+
+    const portfolioId = await ctx.db.insert("portfolio", {
+      startupName: args.startupName,
+      addedAt: Date.now(),
+      website: args.website,
+      bio: args.bio,
+      summary: args.summary,
+    });
+
+    return portfolioId;
+  },
+});
+
+export const removeFromPortfolio = mutation({
+  args: {
+    startupName: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const company = await ctx.db
+      .query("portfolio")
+      .withIndex("by_startup", (q) => q.eq("startupName", args.startupName))
+      .first();
+
+    if (!company) {
+      throw new Error("Company not found in portfolio");
+    }
+
+    await ctx.db.delete(company._id);
+  },
+});

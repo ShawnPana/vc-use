@@ -1,6 +1,6 @@
 import clsx from "clsx";
 import { useState, useEffect } from "react";
-import { useAction, useQuery } from "convex/react";
+import { useAction, useQuery, useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
 import {
   TrendingDown,
@@ -14,6 +14,9 @@ import {
   DollarSign,
   Search,
   Plus,
+  ArrowLeft,
+  Bookmark,
+  BookmarkCheck,
 } from "lucide-react";
 import AgentCard from "./components/AgentCard";
 import { BackgroundCircles } from "@/components/BackgroundCircles";
@@ -23,6 +26,7 @@ import { FundingChart } from "@/components/FundingChart";
 import { MarketDonutChart } from "@/components/MarketDonutChart";
 import { AgentStatusTimeline } from "@/components/AgentStatusTimeline";
 import { AddAgentModal } from "@/components/AddAgentModal";
+import { PortfolioPage } from "@/components/PortfolioPage";
 import "./App.css";
 
 const AGENTS = [
@@ -85,15 +89,42 @@ export default function App() {
   const [searchedStartup, setSearchedStartup] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showAddAgentModal, setShowAddAgentModal] = useState(false);
+  const [showPortfolio, setShowPortfolio] = useState(false);
 
   const analyzeStartup = useAction(api.actions.analyzeStartup);
   const seedDefaultAgents = useAction(api.actions.seedDefaultAgents);
+  const addToPortfolioMutation = useMutation(api.mutations.addToPortfolio);
+  const portfolioCompanies = useQuery(api.queries.getPortfolioCompanies);
+
+  const handleAddToPortfolio = async () => {
+    if (!searchedStartup || !scrapedData) return;
+
+    try {
+      const parsedData = JSON.parse(scrapedData.data);
+      await addToPortfolioMutation({
+        startupName: searchedStartup,
+        website: parsedData.website,
+        bio: parsedData.bio,
+        summary: parsedData.summary,
+      });
+    } catch (error) {
+      console.error("Error adding to portfolio:", error);
+    }
+  };
   const analyses = useQuery(
     api.queries.getAnalyses,
     searchedStartup ? { startupName: searchedStartup } : "skip"
   );
   const summaries = useQuery(
     api.queries.getSummaries,
+    searchedStartup ? { startupName: searchedStartup } : "skip"
+  );
+  const scrapedData = useQuery(
+    api.queries.getScrapedData,
+    searchedStartup ? { startupName: searchedStartup } : "skip"
+  );
+  const isInPortfolio = useQuery(
+    api.queries.isInPortfolio,
     searchedStartup ? { startupName: searchedStartup } : "skip"
   );
   const dbAgents = useQuery(api.queries.getAgents);
@@ -133,31 +164,19 @@ export default function App() {
 
   const isSummariesLoading = !summaries || summaries.length === 0;
 
-  // Use database agents if available, otherwise fall back to hardcoded AGENTS
-  const agentMeta = (dbAgents && dbAgents.length > 0 ? dbAgents : AGENTS).map((agent) => {
-    const agentId = 'agentId' in agent ? agent.agentId : agent.id;
-    const { status, analysis } = getAgentStatus(agentId);
+  // Use database agents only - no fallback
+  const agentMeta = (dbAgents || []).map((agent) => {
+    const { status, analysis } = getAgentStatus(agent.agentId);
+    const frontendAgent = AGENTS.find((a) => a.id === agent.agentId);
 
-    // If it's a database agent, use its data
-    if ('agentId' in agent) {
-      const frontendAgent = AGENTS.find((a) => a.id === agent.agentId);
-      return {
-        id: agent.agentId,
-        name: agent.name,
-        icon: frontendAgent?.icon || Brain,
-        accent: agent.accent || frontendAgent?.accent || "#818cf8",
-        status,
-        analysis,
-        prompt: agent.prompt,
-      };
-    }
-
-    // Otherwise use frontend agent
     return {
-      ...agent,
+      id: agent.agentId,
+      name: agent.name,
+      icon: frontendAgent?.icon || Brain,
+      accent: agent.accent || "#818cf8",
       status,
       analysis,
-      prompt: "",
+      prompt: agent.prompt,
     };
   });
 
@@ -165,9 +184,61 @@ export default function App() {
   const loadingAgents = agentMeta.filter((agent) => agent.status === "loading").length;
   const errorAgents = agentMeta.filter((agent) => agent.status === "error").length;
 
+  // Show portfolio page
+  if (showPortfolio) {
+    return (
+      <div className="app-container">
+        <ThemeToggle />
+        <BackgroundCircles />
+        <PortfolioPage
+          onSelectCompany={(companyName) => {
+            setSearchedStartup(companyName);
+            setShowPortfolio(false);
+          }}
+          onBack={() => setShowPortfolio(false)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="app-container">
       <ThemeToggle />
+
+      {/* Portfolio Tab Button */}
+      <button
+        onClick={() => setShowPortfolio(true)}
+        style={{
+          position: "fixed",
+          top: "1.5rem",
+          right: "5rem",
+          background: "var(--color-card)",
+          border: "1px solid var(--color-border)",
+          borderRadius: "0.5rem",
+          padding: "0.625rem 1rem",
+          cursor: "pointer",
+          color: "var(--color-foreground)",
+          fontSize: "0.9rem",
+          fontWeight: 500,
+          display: "flex",
+          alignItems: "center",
+          gap: "0.5rem",
+          transition: "all 0.2s",
+          zIndex: 100,
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = "var(--color-foreground)";
+          e.currentTarget.style.color = "var(--color-background)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = "var(--color-card)";
+          e.currentTarget.style.color = "var(--color-foreground)";
+        }}
+      >
+        <Bookmark size={16} />
+        Portfolio ({portfolioCompanies?.length || 0})
+      </button>
+
       <BackgroundCircles />
 
       <main className="app-main">
@@ -182,7 +253,7 @@ export default function App() {
                 VC-Use
               </h1>
               <p className="hero-subtitle">
-                AI-powered startup analysis. Get instant insights from six specialized agents in seconds.
+                AI-powered startup analysis. Get instant insights from  specialized agents in seconds.
               </p>
             </div>
 
@@ -235,7 +306,82 @@ export default function App() {
           <section className="dashboard" aria-live="polite">
             <article className="dashboard__tile dashboard__tile--headline">
               <div className="dashboard__headline-top">
-                <p className="dashboard__agent-scroll-note">Portfolio Assembly</p>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
+                  <p className="dashboard__agent-scroll-note">Portfolio Assembly</p>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <button
+                      onClick={() => setSearchedStartup(null)}
+                      style={{
+                        background: "none",
+                        border: "1px solid var(--color-border)",
+                        borderRadius: "0.5rem",
+                        padding: "0.4rem 0.75rem",
+                        cursor: "pointer",
+                        color: "var(--color-foreground)",
+                        fontSize: "0.85rem",
+                        fontWeight: 500,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                        transition: "all 0.2s",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = "var(--color-foreground)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = "var(--color-border)";
+                      }}
+                    >
+                      <ArrowLeft size={16} />
+                      Back
+                    </button>
+                    {!isInPortfolio && (
+                      <button
+                        onClick={() => void handleAddToPortfolio()}
+                        style={{
+                          background: "var(--color-foreground)",
+                          border: "none",
+                          borderRadius: "0.5rem",
+                          padding: "0.4rem 0.75rem",
+                          cursor: "pointer",
+                          color: "var(--color-background)",
+                          fontSize: "0.85rem",
+                          fontWeight: 600,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.4rem",
+                          transition: "all 0.2s",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = "translateY(-1px)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = "translateY(0)";
+                        }}
+                      >
+                        <Bookmark size={16} />
+                        Add to Portfolio
+                      </button>
+                    )}
+                    {isInPortfolio && (
+                      <div style={{
+                        background: "transparent",
+                        border: "1px solid #34d399",
+                        borderRadius: "0.5rem",
+                        padding: "0.4rem 0.75rem",
+                        color: "#34d399",
+                        fontSize: "0.85rem",
+                        fontWeight: 600,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                      }}>
+                        <BookmarkCheck size={16} />
+                        In Portfolio
+                      </div>
+                    )}
+                  </div>
+                </div>
                 <h2 className="dashboard__headline-title">{searchedStartup}</h2>
                 <p className="dashboard__headline-subtitle">
                   {getSummaryContent("company_overview") ||
@@ -338,24 +484,43 @@ export default function App() {
                   <Plus size={18} />
                 </button>
               </div>
-              <p className="dashboard__agent-scroll-note">
-                Scroll to review detailed memos from each perspective.
-              </p>
-              <div className="dashboard__agents">
-                {agentMeta.map((agent, index) => (
-                  <AgentCard
-                    key={agent.id}
-                    agentId={agent.id}
-                    name={agent.name}
-                    icon={agent.icon}
-                    accent={agent.accent}
-                    analysis={agent.analysis}
-                    status={agent.status}
-                    delay={index * 120}
-                    prompt={agent.prompt}
-                  />
-                ))}
-              </div>
+              {agentMeta.length === 0 ? (
+                <div style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "3rem 1rem",
+                  color: "var(--color-muted-foreground)",
+                  textAlign: "center",
+                  gap: "0.75rem",
+                }}>
+                  <Users size={48} style={{ opacity: 0.3 }} />
+                  <p style={{ fontSize: "1.1rem", fontWeight: 500 }}>No agents set up yet</p>
+                  <p style={{ fontSize: "0.9rem", opacity: 0.8 }}>Click the + button above to add your first agent</p>
+                </div>
+              ) : (
+                <>
+                  <p className="dashboard__agent-scroll-note">
+                    Scroll to review detailed memos from each perspective.
+                  </p>
+                  <div className="dashboard__agents">
+                    {agentMeta.map((agent, index) => (
+                      <AgentCard
+                        key={agent.id}
+                        agentId={agent.id}
+                        name={agent.name}
+                        icon={agent.icon}
+                        accent={agent.accent}
+                        analysis={agent.analysis}
+                        status={agent.status}
+                        delay={index * 120}
+                        prompt={agent.prompt}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
             </article>
           </section>
         )}

@@ -53,3 +53,26 @@ export const getActiveAgents = query({
     return agents.filter(a => a.isActive).sort((a, b) => a.order - b.order);
   },
 });
+
+export const getPortfolioCompanies = query({
+  args: {},
+  handler: async (ctx) => {
+    const companies = await ctx.db
+      .query("portfolio")
+      .withIndex("by_added_date")
+      .order("desc")
+      .collect();
+    return companies;
+  },
+});
+
+export const isInPortfolio = query({
+  args: { startupName: v.string() },
+  handler: async (ctx, args) => {
+    const company = await ctx.db
+      .query("portfolio")
+      .withIndex("by_startup", (q) => q.eq("startupName", args.startupName))
+      .first();
+    return !!company;
+  },
+});

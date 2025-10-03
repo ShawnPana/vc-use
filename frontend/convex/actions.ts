@@ -75,28 +75,67 @@ export const seedDefaultAgents = action({
   },
 });
 
-// Mock scraping function - replace with actual Browser Use implementation
+// Call backend Browser Use API to scrape startup data
 export const scrapeStartupData = action({
   args: { startupName: v.string() },
   handler: async (ctx, args) => {
-    // TODO: Implement actual Browser Use scraping
-    // For now, return mock data structure
-    const mockData = {
-      startupName: args.startupName,
-      website: `https://${args.startupName.toLowerCase().replace(/\s+/g, '')}.com`,
-      description: "AI-powered startup...",
-      founders: ["Founder 1", "Founder 2"],
-      funding: "Series A",
-      employees: "10-50",
-    };
+    const backendUrl = process.env.BACKEND_API_URL || "http://localhost:8000";
+    const apiKey = process.env.BACKEND_API_KEY;
 
-    // Store scraped data
-    await ctx.runMutation(api.mutations.storeScrapedData, {
-      startupName: args.startupName,
-      data: JSON.stringify(mockData),
-    });
+    if (!apiKey) {
+      throw new Error("BACKEND_API_KEY not configured");
+    }
 
-    return mockData;
+    try {
+      const response = await fetch(`${backendUrl}/api/full-analysis`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": apiKey,
+        },
+        body: JSON.stringify({
+          company_name: args.startupName,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Backend API error: ${response.status} ${errorText}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || "Backend analysis failed");
+      }
+
+      // Extract and format the data from backend
+      const companyData = result.data;
+      const scrapedData = {
+        startupName: args.startupName,
+        website: companyData.company_website,
+        bio: companyData.company_bio,
+        summary: companyData.company_summary,
+        founders: companyData.founders_info.founders.map((f: any) => ({
+          name: f.name,
+          linkedin: f.social_media?.linkedin,
+          twitter: f.social_media?.X,
+          personalWebsite: f.personal_website,
+          bio: f.bio,
+        })),
+      };
+
+      // Store scraped data
+      await ctx.runMutation(api.mutations.storeScrapedData, {
+        startupName: args.startupName,
+        data: JSON.stringify(scrapedData),
+      });
+
+      return scrapedData;
+    } catch (error) {
+      console.error("Error scraping startup data:", error);
+      throw error;
+    }
   },
 });
 
@@ -140,7 +179,7 @@ export const analyzeWithCerebras = action({
             },
             {
               role: "user",
-              content: `Analyze this startup based on the following data:\n\n${args.scrapedData}\n\nProvide a detailed analysis in 3-5 paragraphs.`,
+              content: `Analyze this startup based on the following detailed data gathered from web research:\n\n${args.scrapedData}\n\nProvide a detailed, insightful analysis in 3-5 paragraphs focusing on your specific perspective.`,
             },
           ],
           temperature: 0.7,
@@ -263,22 +302,34 @@ export const generateSummaries = action({
       return;
     }
 
+    // Parse scraped data to extract rich information
+    const scrapedData = JSON.parse(args.scrapedData);
+
+    // For founder_story, use the actual founder bios if available
+    const founderBios = scrapedData.founders
+      ?.map((f: any) => `${f.name}: ${f.bio || 'Bio not available'}`)
+      .join('\n') || '';
+
     const summaryTypes = [
       {
         type: "founder_story",
-        prompt: "Create a brief, compelling summary of the founders' background and how they came together to start this company. 2-3 sentences max.",
+        prompt: `Based on the following founder information, create a brief, compelling summary of the founders' background and how they came together to start this company. Focus on their unique experiences and complementary skills. 2-3 sentences max.\n\nFounder Information:\n${founderBios}`,
+        useDirectData: founderBios.length > 0,
       },
       {
         type: "market_position",
         prompt: "Summarize the company's position in the competitive landscape and their unique differentiation. 2-3 sentences max.",
+        useDirectData: false,
       },
       {
         type: "funding_outlook",
         prompt: "Provide an assessment of their current funding stage and what they likely need next. 2-3 sentences max.",
+        useDirectData: false,
       },
       {
         type: "company_overview",
-        prompt: "Provide a tight, 2 sentence summary of the startup that highlights what they do, who they serve, and why they matter right now.",
+        prompt: `Based on this company data, provide a tight, 2 sentence summary that highlights what they do, who they serve, and why they matter right now.\n\nCompany Bio: ${scrapedData.bio || ''}\nCompany Summary: ${scrapedData.summary || ''}`,
+        useDirectData: true,
       },
     ];
 
@@ -299,7 +350,9 @@ export const generateSummaries = action({
               },
               {
                 role: "user",
-                content: `Startup data:\n\n${args.scrapedData}`,
+                content: summary.useDirectData
+                  ? "Generate the summary based on the information in the system prompt."
+                  : `Startup data:\n\n${args.scrapedData}`,
               },
             ],
             temperature: 0.7,

@@ -35,4 +35,13 @@ export default defineSchema({
     isActive: v.boolean(),
     order: v.number(),
   }).index("by_agent_id", ["agentId"]),
+
+  portfolio: defineTable({
+    startupName: v.string(),
+    addedAt: v.number(),
+    website: v.optional(v.string()),
+    bio: v.optional(v.string()),
+    summary: v.optional(v.string()),
+  }).index("by_startup", ["startupName"])
+    .index("by_added_date", ["addedAt"]),
 });
