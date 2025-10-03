@@ -43,7 +43,7 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       "react-refresh/only-export-components": [
         "warn",
-        { allowConstantExport: true },
+        { allowConstantExport: true, allowExportNames: ["buttonVariants"] },
       ],
       // All of these overrides ease getting into
       // TypeScript, and can be removed for stricter
