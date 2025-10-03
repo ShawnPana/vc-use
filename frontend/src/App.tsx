@@ -325,38 +325,47 @@ export default function App() {
         )}
 
         {searchedStartup && (
-          <section className="dashboard" aria-live="polite">
+          <>
+            {/* Back Button - Top Left */}
+            <button
+              onClick={() => setSearchedStartup(null)}
+              style={{
+                position: "fixed",
+                top: "1rem",
+                left: "1rem",
+                background: "var(--color-card)",
+                border: "1px solid var(--color-border)",
+                borderRadius: "0.5rem",
+                padding: "0.625rem 1rem",
+                cursor: "pointer",
+                color: "var(--color-foreground)",
+                fontSize: "0.9rem",
+                fontWeight: 500,
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                transition: "all 0.2s",
+                zIndex: 100,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "var(--color-foreground)";
+                e.currentTarget.style.color = "var(--color-background)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "var(--color-card)";
+                e.currentTarget.style.color = "var(--color-foreground)";
+              }}
+            >
+              <ArrowLeft size={16} />
+              Back
+            </button>
+
+            <section className="dashboard" aria-live="polite">
             <article className="dashboard__tile dashboard__tile--headline">
               <div className="dashboard__headline-top">
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
                   <p className="dashboard__agent-scroll-note">Portfolio Assembly</p>
                   <div style={{ display: "flex", gap: "0.5rem" }}>
-                    <button
-                      onClick={() => setSearchedStartup(null)}
-                      style={{
-                        background: "none",
-                        border: "1px solid var(--color-border)",
-                        borderRadius: "0.5rem",
-                        padding: "0.4rem 0.75rem",
-                        cursor: "pointer",
-                        color: "var(--color-foreground)",
-                        fontSize: "0.85rem",
-                        fontWeight: 500,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.4rem",
-                        transition: "all 0.2s",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = "var(--color-foreground)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = "var(--color-border)";
-                      }}
-                    >
-                      <ArrowLeft size={16} />
-                      Back
-                    </button>
                     {!isInPortfolio && (
                       <button
                         onClick={() => void handleAddToPortfolio()}
@@ -565,6 +574,7 @@ export default function App() {
               )}
             </article>
           </section>
+          </>
         )}
       </main>
 
