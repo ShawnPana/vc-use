@@ -8,39 +8,72 @@ const RATE_LIMIT_DELAY_MS = 500;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Agent configurations
+// Agent configurations with accent colors
 const AGENTS = [
   {
     id: "skeptic",
     name: "The Skeptic",
     prompt: "Act as a highly critical, risk-focused VC. Identify all potential red flags, market risks, competitive threats, and reasons this startup might fail. Analyze unit economics concerns, burn rate risks, and team gaps. Be thorough but fair in your criticism.",
+    icon: "skeptic",
+    accent: "#f87171",
   },
   {
     id: "believer",
     name: "The Believer",
     prompt: "Act as an optimistic, growth-focused VC. Highlight the startup's massive potential, market opportunities, competitive advantages, and what could make this a unicorn. Focus on the upside case, network effects, and scalability. Be enthusiastic but credible.",
+    icon: "believer",
+    accent: "#34d399",
   },
   {
     id: "engineer",
     name: "The Engineer",
     prompt: "Act as a senior technical expert and CTO evaluating the product. Assess technical feasibility, innovation level, architecture scalability, technical moat, and engineering quality. Evaluate their tech stack choices and technical team strength.",
+    icon: "engineer",
+    accent: "#38bdf8",
   },
   {
     id: "market",
     name: "Market Analyst",
     prompt: "Analyze the market opportunity, competitive landscape, market timing, and total addressable market (TAM). Compare to similar companies and their outcomes. Assess go-to-market strategy and market positioning.",
+    icon: "market",
+    accent: "#c084fc",
   },
   {
     id: "people",
     name: "People Expert",
     prompt: "Focus on the founding team. Research their backgrounds, how they met, their complementary skills, previous exits, domain expertise, and why this specific team can execute on this vision. Evaluate team composition and hiring ability.",
+    icon: "people",
+    accent: "#facc15",
   },
   {
     id: "ai",
     name: "AI Strategist",
     prompt: "Evaluate how well this company leverages AI, their AI strategy, defensibility of their AI approach, position in the AI landscape, and whether AI is core to their value prop or just a feature. Assess AI competitive moat.",
+    icon: "ai",
+    accent: "#818cf8",
   },
 ];
+
+// Action to seed default agents to database
+export const seedDefaultAgents = action({
+  args: {},
+  handler: async (ctx): Promise<{ seeded: boolean; count: number }> => {
+    // Use internal mutation to avoid circular dependency
+    const result = await ctx.runMutation(api.mutations.seedAgentsIfEmpty, {
+      agents: AGENTS.map((agent, index) => ({
+        agentId: agent.id,
+        name: agent.name,
+        prompt: agent.prompt,
+        icon: agent.icon,
+        accent: agent.accent,
+        isActive: true,
+        order: index,
+      })),
+    });
+
+    return result;
+  },
+});
 
 // Mock scraping function - replace with actual Browser Use implementation
 export const scrapeStartupData = action({
@@ -72,19 +105,17 @@ export const analyzeWithCerebras = action({
   args: {
     startupName: v.string(),
     agentId: v.string(),
+    agentName: v.string(),
+    agentPrompt: v.string(),
     scrapedData: v.string(),
   },
   handler: async (ctx, args) => {
-    const agent = AGENTS.find((a) => a.id === args.agentId);
-    if (!agent) {
-      throw new Error(`Agent ${args.agentId} not found`);
-    }
 
     // Create analysis record with loading status
     const analysisId = await ctx.runMutation(api.mutations.createAnalysis, {
       startupName: args.startupName,
       agentId: args.agentId,
-      agentName: agent.name,
+      agentName: args.agentName,
     });
 
     try {
@@ -105,7 +136,7 @@ export const analyzeWithCerebras = action({
           messages: [
             {
               role: "system",
-              content: agent.prompt,
+              content: args.agentPrompt,
             },
             {
               role: "user",
@@ -156,17 +187,56 @@ export const analyzeStartup = action({
 
     const scrapedDataString = JSON.stringify(scrapedData);
 
-    // Run agents sequentially to avoid hitting Cerebras rate limits
-    for (const [index, agent] of AGENTS.entries()) {
-      try {
-        await ctx.runAction(api.actions.analyzeWithCerebras, {
-          startupName: args.startupName,
+    // Get active agents from database
+    const dbAgents = await ctx.runQuery(api.queries.getActiveAgents);
+
+    // If no agents in DB, seed with default agents
+    if (dbAgents.length === 0) {
+      for (const [index, agent] of AGENTS.entries()) {
+        await ctx.runMutation(api.mutations.upsertAgent, {
           agentId: agent.id,
-          scrapedData: scrapedDataString,
+          name: agent.name,
+          prompt: agent.prompt,
+          icon: agent.id, // Store icon name as string
+          accent: "", // Will be set from frontend
+          isActive: true,
+          order: index,
         });
-      } finally {
-        if (index < AGENTS.length - 1) {
-          await sleep(RATE_LIMIT_DELAY_MS);
+      }
+      // Re-fetch agents
+      const activeAgents = await ctx.runQuery(api.queries.getActiveAgents);
+
+      // Run agents sequentially
+      for (const [index, agent] of activeAgents.entries()) {
+        try {
+          await ctx.runAction(api.actions.analyzeWithCerebras, {
+            startupName: args.startupName,
+            agentId: agent.agentId,
+            agentName: agent.name,
+            agentPrompt: agent.prompt,
+            scrapedData: scrapedDataString,
+          });
+        } finally {
+          if (index < activeAgents.length - 1) {
+            await sleep(RATE_LIMIT_DELAY_MS);
+          }
+        }
+      }
+    } else {
+      // Run agents sequentially to avoid hitting Cerebras rate limits
+      for (const [index, agent] of dbAgents.entries()) {
+        try {
+          await ctx.runAction(api.actions.analyzeWithCerebras, {
+            startupName: args.startupName,
+            agentId: agent.agentId,
+            agentName: agent.name,
+            agentPrompt: agent.prompt,
+            scrapedData: scrapedDataString,
+          });
+        } finally {
+          if (index < dbAgents.length - 1) {
+            await sleep(RATE_LIMIT_DELAY_MS);
+          }
         }
       }
     }

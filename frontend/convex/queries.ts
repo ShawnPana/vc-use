@@ -33,3 +33,23 @@ export const getScrapedData = query({
     return data;
   },
 });
+
+export const getAgents = query({
+  args: {},
+  handler: async (ctx) => {
+    const agents = await ctx.db
+      .query("agents")
+      .collect();
+    return agents.sort((a, b) => a.order - b.order);
+  },
+});
+
+export const getActiveAgents = query({
+  args: {},
+  handler: async (ctx) => {
+    const agents = await ctx.db
+      .query("agents")
+      .collect();
+    return agents.filter(a => a.isActive).sort((a, b) => a.order - b.order);
+  },
+});

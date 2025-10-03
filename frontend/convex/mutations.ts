@@ -91,3 +91,148 @@ export const storeScrapedData = mutation({
     });
   },
 });
+
+export const upsertAgent = mutation({
+  args: {
+    agentId: v.string(),
+    name: v.string(),
+    prompt: v.string(),
+    icon: v.string(),
+    accent: v.string(),
+    isActive: v.boolean(),
+    order: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("agents")
+      .withIndex("by_agent_id", (q) => q.eq("agentId", args.agentId))
+      .first();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        name: args.name,
+        prompt: args.prompt,
+        icon: args.icon,
+        accent: args.accent,
+        isActive: args.isActive,
+        order: args.order,
+      });
+      return existing._id;
+    }
+
+    return await ctx.db.insert("agents", {
+      agentId: args.agentId,
+      name: args.name,
+      prompt: args.prompt,
+      icon: args.icon,
+      accent: args.accent,
+      isActive: args.isActive,
+      order: args.order,
+    });
+  },
+});
+
+export const updateAgentPrompt = mutation({
+  args: {
+    agentId: v.string(),
+    prompt: v.string(),
+    name: v.optional(v.string()),
+    icon: v.optional(v.string()),
+    accent: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const agent = await ctx.db
+      .query("agents")
+      .withIndex("by_agent_id", (q) => q.eq("agentId", args.agentId))
+      .first();
+
+    if (!agent) {
+      // Agent doesn't exist yet - create it
+      const maxOrder = (await ctx.db.query("agents").collect())
+        .reduce((max, a) => Math.max(max, a.order), -1);
+
+      await ctx.db.insert("agents", {
+        agentId: args.agentId,
+        name: args.name || args.agentId,
+        prompt: args.prompt,
+        icon: args.icon || args.agentId,
+        accent: args.accent || "#818cf8",
+        isActive: true,
+        order: maxOrder + 1,
+      });
+      return;
+    }
+
+    await ctx.db.patch(agent._id, {
+      prompt: args.prompt,
+    });
+  },
+});
+
+export const toggleAgentActive = mutation({
+  args: {
+    agentId: v.string(),
+    isActive: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const agent = await ctx.db
+      .query("agents")
+      .withIndex("by_agent_id", (q) => q.eq("agentId", args.agentId))
+      .first();
+
+    if (!agent) {
+      throw new Error(`Agent ${args.agentId} not found`);
+    }
+
+    await ctx.db.patch(agent._id, {
+      isActive: args.isActive,
+    });
+  },
+});
+
+export const deleteAgent = mutation({
+  args: {
+    agentId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const agent = await ctx.db
+      .query("agents")
+      .withIndex("by_agent_id", (q) => q.eq("agentId", args.agentId))
+      .first();
+
+    if (!agent) {
+      throw new Error(`Agent ${args.agentId} not found`);
+    }
+
+    await ctx.db.delete(agent._id);
+  },
+});
+
+export const seedAgentsIfEmpty = mutation({
+  args: {
+    agents: v.array(
+      v.object({
+        agentId: v.string(),
+        name: v.string(),
+        prompt: v.string(),
+        icon: v.string(),
+        accent: v.string(),
+        isActive: v.boolean(),
+        order: v.number(),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    const existingAgents = await ctx.db.query("agents").collect();
+
+    // Only seed if database is empty
+    if (existingAgents.length === 0) {
+      for (const agent of args.agents) {
+        await ctx.db.insert("agents", agent);
+      }
+      return { seeded: true, count: args.agents.length };
+    }
+
+    return { seeded: false, count: existingAgents.length };
+  },
+});

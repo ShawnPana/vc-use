@@ -25,4 +25,14 @@ export default defineSchema({
     data: v.string(),
     timestamp: v.number(),
   }).index("by_startup", ["startupName"]),
+
+  agents: defineTable({
+    agentId: v.string(),
+    name: v.string(),
+    prompt: v.string(),
+    icon: v.string(),
+    accent: v.string(),
+    isActive: v.boolean(),
+    order: v.number(),
+  }).index("by_agent_id", ["agentId"]),
 });

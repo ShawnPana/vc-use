@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAction, useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 import {
@@ -13,6 +13,7 @@ import {
   Target,
   DollarSign,
   Search,
+  Plus,
 } from "lucide-react";
 import AgentCard from "./components/AgentCard";
 import { BackgroundCircles } from "@/components/BackgroundCircles";
@@ -21,6 +22,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { FundingChart } from "@/components/FundingChart";
 import { MarketDonutChart } from "@/components/MarketDonutChart";
 import { AgentStatusTimeline } from "@/components/AgentStatusTimeline";
+import { AddAgentModal } from "@/components/AddAgentModal";
 import "./App.css";
 
 const AGENTS = [
@@ -82,8 +84,10 @@ export default function App() {
   const [startupName, setStartupName] = useState("");
   const [searchedStartup, setSearchedStartup] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [showAddAgentModal, setShowAddAgentModal] = useState(false);
 
   const analyzeStartup = useAction(api.actions.analyzeStartup);
+  const seedDefaultAgents = useAction(api.actions.seedDefaultAgents);
   const analyses = useQuery(
     api.queries.getAnalyses,
     searchedStartup ? { startupName: searchedStartup } : "skip"
@@ -92,6 +96,12 @@ export default function App() {
     api.queries.getSummaries,
     searchedStartup ? { startupName: searchedStartup } : "skip"
   );
+  const dbAgents = useQuery(api.queries.getAgents);
+
+  // Seed default agents on mount
+  useEffect(() => {
+    void seedDefaultAgents();
+  }, [seedDefaultAgents]);
 
   const handleAnalyze = async () => {
     if (!startupName.trim()) return;
@@ -122,9 +132,33 @@ export default function App() {
   };
 
   const isSummariesLoading = !summaries || summaries.length === 0;
-  const agentMeta = AGENTS.map((agent) => {
-    const { status, analysis } = getAgentStatus(agent.id);
-    return { ...agent, status, analysis };
+
+  // Use database agents if available, otherwise fall back to hardcoded AGENTS
+  const agentMeta = (dbAgents && dbAgents.length > 0 ? dbAgents : AGENTS).map((agent) => {
+    const agentId = 'agentId' in agent ? agent.agentId : agent.id;
+    const { status, analysis } = getAgentStatus(agentId);
+
+    // If it's a database agent, use its data
+    if ('agentId' in agent) {
+      const frontendAgent = AGENTS.find((a) => a.id === agent.agentId);
+      return {
+        id: agent.agentId,
+        name: agent.name,
+        icon: frontendAgent?.icon || Brain,
+        accent: agent.accent || frontendAgent?.accent || "#818cf8",
+        status,
+        analysis,
+        prompt: agent.prompt,
+      };
+    }
+
+    // Otherwise use frontend agent
+    return {
+      ...agent,
+      status,
+      analysis,
+      prompt: "",
+    };
   });
 
   const completedAgents = agentMeta.filter((agent) => agent.status === "completed").length;
@@ -277,6 +311,32 @@ export default function App() {
                   <Users />
                 </span>
                 <h3 className="dashboard__tile-title">Agent Console</h3>
+                <button
+                  onClick={() => setShowAddAgentModal(true)}
+                  style={{
+                    marginLeft: "auto",
+                    background: "none",
+                    border: "1px solid var(--color-border)",
+                    borderRadius: "0.5rem",
+                    padding: "0.4rem",
+                    cursor: "pointer",
+                    color: "var(--color-muted-foreground)",
+                    display: "flex",
+                    alignItems: "center",
+                    transition: "all 0.2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = "var(--color-foreground)";
+                    e.currentTarget.style.borderColor = "var(--color-foreground)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = "var(--color-muted-foreground)";
+                    e.currentTarget.style.borderColor = "var(--color-border)";
+                  }}
+                  title="Add new agent"
+                >
+                  <Plus size={18} />
+                </button>
               </div>
               <p className="dashboard__agent-scroll-note">
                 Scroll to review detailed memos from each perspective.
@@ -285,12 +345,14 @@ export default function App() {
                 {agentMeta.map((agent, index) => (
                   <AgentCard
                     key={agent.id}
+                    agentId={agent.id}
                     name={agent.name}
                     icon={agent.icon}
                     accent={agent.accent}
                     analysis={agent.analysis}
                     status={agent.status}
                     delay={index * 120}
+                    prompt={agent.prompt}
                   />
                 ))}
               </div>
@@ -298,6 +360,10 @@ export default function App() {
           </section>
         )}
       </main>
+
+      {showAddAgentModal && (
+        <AddAgentModal onClose={() => setShowAddAgentModal(false)} />
+      )}
     </div>
   );
 }
