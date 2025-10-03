@@ -6,7 +6,7 @@ import json
 from browser_use import Agent, Browser, ChatGoogle, Tools
 from browser_use_sdk import BrowserUse
 
-from models import Company, Founder, FounderList, SocialMedia  # your Pydantic models from models.py
+from .models import Company, Founder, FounderList, SocialMedia  # your Pydantic models from models.py
 
 load_dotenv()
 
