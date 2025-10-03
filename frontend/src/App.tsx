@@ -18,6 +18,9 @@ import AgentCard from "./components/AgentCard";
 import { BackgroundCircles } from "@/components/BackgroundCircles";
 import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { FundingChart } from "@/components/FundingChart";
+import { MarketDonutChart } from "@/components/MarketDonutChart";
+import { AgentStatusTimeline } from "@/components/AgentStatusTimeline";
 import "./App.css";
 
 const AGENTS = [
@@ -57,6 +60,22 @@ const AGENTS = [
     icon: Brain,
     accent: "#818cf8",
   },
+];
+
+// Sample funding data - in production this would come from your API
+const SAMPLE_FUNDING_DATA = [
+  { date: 'Q1 2021', amount: 500000 },
+  { date: 'Q3 2021', amount: 2000000 },
+  { date: 'Q1 2022', amount: 5000000 },
+  { date: 'Q4 2022', amount: 15000000 },
+  { date: 'Q2 2023', amount: 35000000 },
+];
+
+// Sample market size data - in production this would come from your API
+const SAMPLE_MARKET_DATA = [
+  { name: 'TAM', label: 'Total Addressable Market', value: 50000000000 },
+  { name: 'SAM', label: 'Serviceable Available Market', value: 15000000000 },
+  { name: 'SOM', label: 'Serviceable Obtainable Market', value: 3000000000 },
 ];
 
 export default function App() {
@@ -185,22 +204,9 @@ export default function App() {
                 <p className="dashboard__agent-scroll-note">Portfolio Assembly</p>
                 <h2 className="dashboard__headline-title">{searchedStartup}</h2>
                 <p className="dashboard__headline-subtitle">
-                  Six specialist agents collaborate to shape a VC-ready perspective in under a minute.
+                  {getSummaryContent("company_overview") ||
+                    "Concise overview pending. Agents are compiling the company snapshot."}
                 </p>
-                <div className="dashboard__metrics-grid">
-                  <div className="dashboard__metric">
-                    <span className="dashboard__metric-label">Completed</span>
-                    <span className="dashboard__metric-value">{completedAgents}</span>
-                  </div>
-                  <div className="dashboard__metric">
-                    <span className="dashboard__metric-label">In Flight</span>
-                    <span className="dashboard__metric-value">{loadingAgents}</span>
-                  </div>
-                  <div className="dashboard__metric">
-                    <span className="dashboard__metric-label">Flags</span>
-                    <span className="dashboard__metric-value">{errorAgents}</span>
-                  </div>
-                </div>
               </div>
 
             </article>
@@ -228,16 +234,10 @@ export default function App() {
                 <span className="dashboard__tile-icon">
                   <Target />
                 </span>
-                <h3 className="dashboard__tile-title">Market Position</h3>
+                <h3 className="dashboard__tile-title">Market Opportunity</h3>
               </div>
-              <div className="dashboard__tile-body dashboard__tile-body--scroll">
-                {isSummariesLoading ? (
-                  <p className="dashboard__placeholder">Mapping competitive terrain…</p>
-                ) : getSummaryContent("market_position") ? (
-                  <p>{getSummaryContent("market_position")}</p>
-                ) : (
-                  <p className="dashboard__placeholder">No market insights collected yet.</p>
-                )}
+              <div className="dashboard__tile-body" style={{ paddingTop: '0.5rem' }}>
+                <MarketDonutChart data={SAMPLE_MARKET_DATA} />
               </div>
             </article>
 
@@ -262,33 +262,12 @@ export default function App() {
             <article className="dashboard__tile dashboard__tile--metrics">
               <div className="dashboard__tile-header">
                 <span className="dashboard__tile-icon">
-                  <Brain />
+                  <TrendingUp />
                 </span>
-                <h3 className="dashboard__tile-title">Agent Timeline</h3>
+                <h3 className="dashboard__tile-title">Funding Progress</h3>
               </div>
-              <div className="dashboard__tile-body">
-                <div className="dashboard__status-list">
-                  {agentMeta.map((agent) => (
-                    <div key={agent.id} className="dashboard__status-item">
-                      <div className="dashboard__status-agent">
-                        <span
-                          className={clsx(
-                            "dashboard__status-dot",
-                            agent.status === "loading" && "dashboard__status-dot--loading",
-                            agent.status === "completed" && "dashboard__status-dot--completed",
-                            agent.status === "error" && "dashboard__status-dot--error",
-                          )}
-                        />
-                        <span>{agent.name}</span>
-                      </div>
-                      <span className="dashboard__status-value">
-                        {agent.status === "loading" && "Running"}
-                        {agent.status === "completed" && "Complete"}
-                        {agent.status === "error" && "Error"}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+              <div className="dashboard__tile-body" style={{ paddingTop: '1rem' }}>
+                <FundingChart data={SAMPLE_FUNDING_DATA} />
               </div>
             </article>
 

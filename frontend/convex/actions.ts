@@ -206,6 +206,10 @@ export const generateSummaries = action({
         type: "funding_outlook",
         prompt: "Provide an assessment of their current funding stage and what they likely need next. 2-3 sentences max.",
       },
+      {
+        type: "company_overview",
+        prompt: "Provide a tight, 2 sentence summary of the startup that highlights what they do, who they serve, and why they matter right now.",
+      },
     ];
 
     for (const summary of summaryTypes) {
