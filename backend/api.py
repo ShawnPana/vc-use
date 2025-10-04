@@ -7,7 +7,7 @@ import os
 import asyncio
 from dotenv import load_dotenv
 
-from scrapers.analyze_company import analyze_company, research_founders
+from scrapers.analyze_company import analyze_company, research_founders, research_hype
 from scrapers.models import Company, FounderList, Founder, SocialMedia
 
 load_dotenv()
@@ -50,6 +50,12 @@ class FounderResearchRequest(BaseModel):
 class CompanyAnalysisResponse(BaseModel):
     success: bool
     data: Optional[Company] = None
+    error: Optional[str] = None
+
+class FullAnalysisResponse(BaseModel):
+    success: bool
+    company: Optional[Company] = None
+    hype: Optional[str] = None
     error: Optional[str] = None
 
 class FounderResearchResponse(BaseModel):
@@ -120,31 +126,39 @@ async def api_research_founders(
             error=str(e)
         )
 
-# Full company analysis (company + founders)
-@app.post("/api/full-analysis", response_model=CompanyAnalysisResponse)
+# Full company analysis (company + hype, then founders separately)
+@app.post("/api/full-analysis", response_model=FullAnalysisResponse)
 async def api_full_analysis(
     request: CompanyAnalysisRequest,
     api_key: str = Security(verify_api_key)
 ):
     """
-    Complete company analysis including company info and detailed founder research
+    Returns company info and hype research immediately.
+    Founder research runs in the background (dependent on analyze_company).
+    Frontend should call /api/research-founders separately to get enriched founder data.
     """
     try:
-        # Step 1: Analyze company
-        company = await analyze_company(request.company_name)
+        # Run analyze_company and research_hype in parallel
+        results = await asyncio.gather(
+            analyze_company(request.company_name),
+            research_hype(request.company_name)
+        )
 
-        # Step 2: Research founders
-        founders = await research_founders(request.company_name, company.founders_info)
+        (company, browser1), (hype, browser2) = results
 
-        # Step 3: Update company with researched founders
-        company.founders_info = founders
+        # Stop the browsers
+        await browser1.stop()
+        await browser2.stop()
 
-        return CompanyAnalysisResponse(
+        # Return company and hype immediately
+        # Frontend can call /api/research-founders separately to get enriched founder info
+        return FullAnalysisResponse(
             success=True,
-            data=company
+            company=company,
+            hype=hype
         )
     except Exception as e:
-        return CompanyAnalysisResponse(
+        return FullAnalysisResponse(
             success=False,
             error=str(e)
         )

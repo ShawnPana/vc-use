@@ -6,6 +6,7 @@ import json
 from browser_use import Agent, Browser, ChatGoogle, Tools
 from browser_use_sdk import BrowserUse
 
+# from models import Company, Founder, FounderList, SocialMedia  # your Pydantic models from models.py
 from .models import Company, Founder, FounderList, SocialMedia  # your Pydantic models from models.py
 
 load_dotenv()
@@ -17,8 +18,8 @@ async def analyze_company(company_name: str) -> dict:
     llm = ChatGoogle(model="gemini-flash-latest")
 
     browser = Browser(
-        use_cloud=True
-        
+        use_cloud=True,
+        keep_alive=True
     )
 
     # IMPORTANT: match the keys to your Company model (company_website, not official_website)
@@ -73,7 +74,7 @@ async def analyze_company(company_name: str) -> dict:
             print(f'Social Media:      {founder.social_media}')
             print(f'Personal Website:  {founder.personal_website}')
             print(f'Bio:              {founder.bio}')
-        return parsed
+        return parsed, browser
     else:
         print('No result')
         raise Exception("Failed to analyze company")
@@ -124,7 +125,10 @@ async def research_founders(company_name: str, founders: FounderList) -> dict:
     tools = Tools()
     llm = ChatGoogle(model="gemini-flash-latest")
 
-    browser = Browser(use_cloud=True)
+    browser = Browser(
+        use_cloud=True,
+        keep_alive=True
+    )
 
     agent = Agent(
         task=task,
@@ -148,36 +152,68 @@ async def research_founders(company_name: str, founders: FounderList) -> dict:
             print(f'Social Media:      {founder.social_media}')
             print(f'Personal Website:  {founder.personal_website}')
             print(f'Bio:              {founder.bio}')
-        return parsed
+        return parsed, browser
     else:
         print('No result')
         return founders
 
+async def research_hype(company_name: str) -> str:
+    task = f"""
+        - Use Google to research the hype around {company_name} by querying "{company_name} startup news"
+        - Scroll all the way to the bottom of the search results page to load all results
+        - Use the extract_structured_data action to get the first page of results
+        - **IMPORTANT** 
+            - Just use the google search results and the summaries under the links, do not click on any links
+            - Create todos for each action you will take
+        - Summarize your findings in a brief report
+        - Return ONLY a string that summarizes your findings, no extra text.
+    """
+
+    tools = Tools()
+    llm = ChatGoogle(model="gemini-flash-latest")
+
+    browser = Browser(use_cloud=True, keep_alive=True)
+
+    agent = Agent(
+        task=task,
+        llm=llm,
+        browser=browser,
+        tools=tools,
+        available_file_paths=[],
+        channel='chrome'
+    )
+
+    history = await agent.run()
+
+    result = history.final_result()
+    return result, browser
+
 async def main():
-    company_name = "ThirdLayer"
-    founders = FounderList.model_construct(founders=[
-        Founder(
-            name="Regina Lin",
-            social_media=SocialMedia(),
-            personal_website=None,
-            bio=None
-        ),
-        Founder(
-            name="Kevin Gu",
-            social_media=SocialMedia(),
-            personal_website=None,
-            bio=None
-        )
-    ])
+    # company_name = "ThirdLayer"
+    # founders = FounderList.model_construct(founders=[
+    #     Founder(
+    #         name="Regina Lin",
+    #         social_media=SocialMedia(),
+    #         personal_website=None,
+    #         bio=None
+    #     ),
+    #     Founder(
+    #         name="Kevin Gu",
+    #         social_media=SocialMedia(),
+    #         personal_website=None,
+    #         bio=None
+    #     )
+    # ])
 
-    company = await analyze_company(company_name)
+    # company = await analyze_company(company_name)
 
-    founders = await research_founders(company_name, company.founders_info)
+    # founders = await research_founders(company_name, company.founders_info)
 
-    company.founders_info = founders
+    # company.founders_info = founders
 
-    print("\nFinal Company Info:")
-    print(company)
+    # print("\nFinal Company Info:")
+    # print(company)
+    return None
 
 if __name__ == "__main__":
     asyncio.run(main())
