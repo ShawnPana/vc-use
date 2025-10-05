@@ -1,4 +1,5 @@
 browser_use_sdk
+browser_use
 python-dotenv
 fastapi
 pydantic

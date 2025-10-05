@@ -6,14 +6,14 @@ import json
 from browser_use import Agent, Browser, ChatGoogle, Tools
 from browser_use_sdk import BrowserUse
 
-# from models import Company, Founder, FounderList, SocialMedia  # your Pydantic models from models.py
-from .models import Company, Founder, FounderList, SocialMedia  # your Pydantic models from models.py
+# from models import Company, Founder, FounderList, SocialMedia, Hype  # your Pydantic models from models.py
+from .models import Company, Founder, FounderList, SocialMedia, Hype  # your Pydantic models from models.py
 
 load_dotenv()
 
 client = BrowserUse(api_key=os.getenv("BROWSER_USE_API_KEY"))
 
-async def analyze_company(company_name: str) -> dict:
+async def analyze_company(company_name: str) -> tuple:
     tools = Tools()
     llm = ChatGoogle(model="gemini-flash-latest")
 
@@ -157,16 +157,23 @@ async def research_founders(company_name: str, founders: FounderList) -> dict:
         print('No result')
         return founders
 
-async def research_hype(company_name: str) -> str:
+async def research_hype(company_name: str) -> tuple:
     task = f"""
         - Use Google to research the hype around {company_name} by querying "{company_name} startup news"
         - Scroll all the way to the bottom of the search results page to load all results
         - Use the extract_structured_data action to get the first page of results
-        - **IMPORTANT** 
+        - **IMPORTANT**
             - Just use the google search results and the summaries under the links, do not click on any links
             - Create todos for each action you will take
-        - Summarize your findings in a brief report
-        - Return ONLY a string that summarizes your findings, no extra text.
+        - Summarize your findings in a brief report and store it in "hype_summary"
+        - Extract any important metrics, funding numbers, user counts, or growth statistics if mentioned and store in "numbers"
+        - List the most recent news items or announcements about the company and store in "recent_news"
+        - Provide a structured JSON only (no extra text) in the following format:
+        {{
+            "hype_summary": string,
+            "numbers": string (or "None"),
+            "recent_news": string (or "None")
+        }}
     """
 
     tools = Tools()
@@ -180,13 +187,23 @@ async def research_hype(company_name: str) -> str:
         browser=browser,
         tools=tools,
         available_file_paths=[],
+        output_model_schema=Hype,
         channel='chrome'
     )
 
     history = await agent.run()
 
     result = history.final_result()
-    return result, browser
+    if result:
+        parsed: Hype = Hype.model_validate_json(result)
+        print('\n--------------------------------')
+        print(f'Hype Summary: {parsed.hype_summary}')
+        print(f'Numbers: {parsed.numbers}')
+        print(f'Recent News: {parsed.recent_news}')
+        return parsed, browser
+    else:
+        print('No result')
+        raise Exception("Failed to research hype")
 
 async def main():
     # company_name = "ThirdLayer"

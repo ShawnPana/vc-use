@@ -110,7 +110,7 @@ export const scrapeStartupData = action({
       }
 
       // Extract and format the data from backend
-      const companyData = result.data;
+      const companyData = result.company;
       const scrapedData = {
         startupName: args.startupName,
         website: companyData.company_website,

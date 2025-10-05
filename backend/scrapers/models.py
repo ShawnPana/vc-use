@@ -54,6 +54,14 @@ class Company(PrettyBaseModel):
             f"Company Summary: {self.company_summary}"
         )
 
+class Hype(PrettyBaseModel):
+    hype_summary: str
+    numbers: Optional[str] = None
+    recent_news: Optional[str] = None
+
+    def __str__(self) -> str:
+        return f"Hype Summary: {self.hype_summary}"
+
 # Example
 if __name__ == "__main__":
     sm = SocialMedia(linkedin="https://linkedin.com/in/example", X="@example")

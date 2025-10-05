@@ -8,7 +8,7 @@ import asyncio
 from dotenv import load_dotenv
 
 from scrapers.analyze_company import analyze_company, research_founders, research_hype
-from scrapers.models import Company, FounderList, Founder, SocialMedia
+from scrapers.models import Company, FounderList, Founder, SocialMedia, Hype
 
 load_dotenv()
 
@@ -55,12 +55,17 @@ class CompanyAnalysisResponse(BaseModel):
 class FullAnalysisResponse(BaseModel):
     success: bool
     company: Optional[Company] = None
-    hype: Optional[str] = None
+    hype: Optional[Hype] = None
     error: Optional[str] = None
 
 class FounderResearchResponse(BaseModel):
     success: bool
     data: Optional[FounderList] = None
+    error: Optional[str] = None
+
+class HypeResearchResponse(BaseModel):
+    success: bool
+    data: Optional[Hype] = None
     error: Optional[str] = None
 
 # Health check endpoint
@@ -88,12 +93,15 @@ async def api_analyze_company(
     - Company bio
     - Founder names
     - Company summary
+
+    Note: Use /api/full-analysis for parallel company + hype research
     """
     try:
-        result = await analyze_company(request.company_name)
+        company, browser = await analyze_company(request.company_name)
+        await browser.stop()
         return CompanyAnalysisResponse(
             success=True,
-            data=result
+            data=company
         )
     except Exception as e:
         return CompanyAnalysisResponse(
@@ -126,16 +134,16 @@ async def api_research_founders(
             error=str(e)
         )
 
-# Full company analysis (company + hype, then founders separately)
+# Full company analysis (company + hype in parallel)
 @app.post("/api/full-analysis", response_model=FullAnalysisResponse)
 async def api_full_analysis(
     request: CompanyAnalysisRequest,
     api_key: str = Security(verify_api_key)
 ):
     """
-    Returns company info and hype research immediately.
-    Founder research runs in the background (dependent on analyze_company).
-    Frontend should call /api/research-founders separately to get enriched founder data.
+    Complete company analysis including company info and hype research.
+    Runs analyze_company and research_hype in parallel.
+    Returns company data and hype info. Frontend should call /api/research-founders separately.
     """
     try:
         # Run analyze_company and research_hype in parallel
@@ -146,12 +154,10 @@ async def api_full_analysis(
 
         (company, browser1), (hype, browser2) = results
 
-        # Stop the browsers
+        # Stop both browsers after both complete
         await browser1.stop()
         await browser2.stop()
 
-        # Return company and hype immediately
-        # Frontend can call /api/research-founders separately to get enriched founder info
         return FullAnalysisResponse(
             success=True,
             company=company,
