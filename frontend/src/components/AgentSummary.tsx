@@ -75,9 +75,9 @@ function generateSummaryText(agents: AgentAnalysis[], startupName: string): stri
   const positiveKeywords = ["strong", "excellent", "promising", "innovative", "leading", "impressive", "solid", "growing", "successful", "advantage", "opportunity"];
   const negativeKeywords = ["risk", "concern", "challenge", "difficult", "weak", "threat", "uncertain", "limited", "struggle", "competition"];
 
-  let positivePoints: string[] = [];
-  let negativePoints: string[] = [];
-  let marketInsights: string[] = [];
+  const positivePoints: string[] = [];
+  const negativePoints: string[] = [];
+  const marketInsights: string[] = [];
 
   agents.forEach(agent => {
     const analysis = agent.analysis;

@@ -4,14 +4,14 @@ export interface ParsedMetric {
   valueNumeric?: number;
 }
 
-const CURRENCY_REGEX = /(?:(?:usd|us\$)\s*)?(\$|€|£)?\s*(\d[\d,\.]*)(\s?(?:billion|million|thousand|bn|m|b|k))?/i;
+const CURRENCY_REGEX = /(?:(?:usd|us\$)\s*)?(\$|€|£)?\s*(\d[\d,.]*)(\s?(?:billion|million|thousand|bn|m|b|k))?/i;
 
 const LINE_SPLIT_REGEX = /[\r\n]+/;
 
-const DELIMITER_REGEX = /[:\u2013\-]\s*/; // colon, en dash, or hyphen followed by space
+const DELIMITER_REGEX = /[-:\u2013]\s*/; // hyphen, colon, or en dash followed by space
 
 function sanitizeLine(line: string): string {
-  return line.replace(/^[\s\-\*•\u2022]+/, "").trim();
+  return line.replace(/^[\s*•\u2022-]+/, "").trim();
 }
 
 function extractNumericValue(text: string): number | undefined {

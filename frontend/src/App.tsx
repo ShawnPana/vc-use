@@ -6,11 +6,10 @@ import {
   TrendingUp,
   Code,
   Globe,
+  Target,
   Users,
   Brain,
   Lightbulb,
-  Target,
-  DollarSign,
   Search,
   Plus,
   ArrowLeft,
@@ -30,6 +29,15 @@ import { AgentSummary } from "@/components/AgentSummary";
 import { ExpandedModal } from "@/components/ExpandedModal";
 import { parseHypeNumbers, getLatestFundingMetric, formatMetricValue, ParsedMetric } from "@/utils/hype";
 import "./App.css";
+
+const truncateText = (text: string, limit = 140) => {
+  if (!text) {
+    return "";
+  }
+  return text.length > limit ? `${text.slice(0, limit).trim()}…` : text;
+};
+
+const stripLeadingMarkers = (text: string) => text.replace(/^[\s*•\u2022-]+/, "").trim();
 
 const AGENTS = [
   {
@@ -177,9 +185,16 @@ export default function App() {
     return hypeRecentNews
       .replace(/•/g, "\n")
       .split(/[\r\n]+/)
-      .map((item: string) => item.replace(/^[\s\-\*•\u2022]+/, "").trim())
+      .map((item: string) => stripLeadingMarkers(item))
       .filter(Boolean);
   }, [hypeRecentNews]);
+  
+  const hypeSummarySnippet = useMemo(() => {
+    if (!hypeSummary) {
+      return "";
+    }
+    return truncateText(hypeSummary, 190);
+  }, [hypeSummary]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -580,9 +595,9 @@ export default function App() {
             <article className="dashboard__tile dashboard__tile--funding">
               <div className="dashboard__tile-header">
                 <span className="dashboard__tile-icon">
-                  <DollarSign />
+                  <Globe />
                 </span>
-                <h3 className="dashboard__tile-title">Capital Outlook</h3>
+                <h3 className="dashboard__tile-title">News Pulse</h3>
                 <button
                   onClick={() => setExpandedTile("funding")}
                   style={{
@@ -611,12 +626,63 @@ export default function App() {
                 </button>
               </div>
               <div className="dashboard__tile-body dashboard__tile-body--scroll">
-                {isSummariesLoading ? (
-                  <p className="dashboard__placeholder">Assembling capital plan…</p>
-                ) : getSummaryContent("funding_outlook") ? (
-                  <p>{getSummaryContent("funding_outlook")}</p>
+                {recentNewsItems.length === 0 && !hypeSummarySnippet ? (
+                  <p className="dashboard__placeholder">No market signals captured yet.</p>
                 ) : (
-                  <p className="dashboard__placeholder">No funding guidance captured yet.</p>
+                  <div style={{ display: "grid", gap: "1rem" }}>
+                    {hypeSummarySnippet && (
+                      <div
+                        style={{
+                          border: "1px solid var(--color-border)",
+                          borderRadius: "0.75rem",
+                          padding: "0.85rem 1rem",
+                          background: "var(--color-card)",
+                          fontSize: "0.9rem",
+                          lineHeight: 1.6,
+                          color: "var(--color-muted-foreground)",
+                        }}
+                      >
+                        {hypeSummarySnippet}
+                      </div>
+                    )}
+
+                    {recentNewsItems.slice(0, 3).map((item: string, index: number) => (
+                      <div
+                        key={`news-${index}`}
+                        style={{
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: "0.75rem",
+                          fontSize: "0.85rem",
+                          color: "var(--color-foreground)",
+                        }}
+                      >
+                        <span
+                          style={{
+                            minWidth: "0.75rem",
+                            height: "0.75rem",
+                            borderRadius: "999px",
+                            background: "var(--color-primary)",
+                            marginTop: "0.4rem",
+                          }}
+                        />
+                        <span>{item}</span>
+                      </div>
+                    ))}
+
+                    {!isSummariesLoading && getSummaryContent("funding_outlook") && (
+                      <div
+                        style={{
+                          fontSize: "0.8rem",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.08em",
+                          color: "var(--color-muted-foreground)",
+                        }}
+                      >
+                        {getSummaryContent("funding_outlook")}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </article>
@@ -849,65 +915,65 @@ export default function App() {
         </div>
       </ExpandedModal>
 
-      {/* Expanded Modal for Capital Outlook */}
+      {/* Expanded Modal for News Pulse */}
       <ExpandedModal
         isOpen={expandedTile === "funding"}
         onClose={() => setExpandedTile(null)}
-        title="Capital Outlook"
-        icon={<DollarSign />}
+        title="News Pulse"
+        icon={<Globe />}
       >
         <div style={{ fontSize: "1rem", lineHeight: 1.8 }}>
-          {isSummariesLoading ? (
-            <p>Loading funding information...</p>
+          {recentNewsItems.length === 0 && !hypeSummary && isSummariesLoading ? (
+            <p>Gathering the latest market signals…</p>
           ) : (
             <>
-              <div style={{ marginBottom: "2rem" }}>
-                <LatestFundingStat
-                  latestMetric={latestFundingMetric}
-                  metrics={hypeMetrics}
-                  isLoading={isHypeLoading}
-                />
-              </div>
-              <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Funding Assessment</h3>
-              <p style={{ marginBottom: "1.5rem" }}>
-                {getSummaryContent("funding_outlook") || "Funding outlook will appear here once the analysis is complete."}
-              </p>
-
-              <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Key Considerations</h3>
-              <ul style={{ paddingLeft: "1.5rem", lineHeight: 1.8 }}>
-                <li>Current funding stage and runway</li>
-                <li>Burn rate and capital efficiency</li>
-                <li>Investor interest and market conditions</li>
-                <li>Competitive funding landscape</li>
-                <li>Next round timing and valuation expectations</li>
-              </ul>
-
-              {parsedScrapedData && (
-                <div style={{ marginTop: "2rem" }}>
-                  <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Company Overview</h3>
+              {hypeSummary && (
+                <div style={{ marginBottom: "1.75rem" }}>
+                  <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "0.75rem" }}>Hype Narrative</h3>
                   <div
                     style={{
-                      maxHeight: "220px",
+                      maxHeight: "260px",
                       overflowY: "auto",
                       paddingRight: "0.75rem",
                       marginRight: "-0.75rem",
                     }}
                   >
-                    <p style={{ margin: 0 }}>{parsedScrapedData.summary}</p>
+                    <p style={{ fontSize: "0.95rem", lineHeight: 1.6 }}>{hypeSummary}</p>
                   </div>
                 </div>
               )}
 
-              {recentNewsItems.length > 0 && (
-                <div style={{ marginTop: "2rem" }}>
-                  <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Recent Headlines</h3>
+              {recentNewsItems.length > 0 ? (
+                <div style={{ marginBottom: "1.75rem" }}>
+                  <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "0.75rem" }}>Latest Headlines</h3>
                   <ul style={{ paddingLeft: "1.25rem", lineHeight: 1.7 }}>
                     {recentNewsItems.map((item: string, index: number) => (
-                      <li key={`${item}-${index}`}>{item}</li>
+                      <li key={`headline-${index}`}>{item}</li>
                     ))}
                   </ul>
                 </div>
+              ) : (
+                <p style={{ color: "var(--color-muted-foreground)", marginBottom: "1.75rem" }}>
+                  No recent headlines captured yet. Run a new analysis when additional news breaks.
+                </p>
               )}
+
+              <div style={{ display: "grid", gap: "1.75rem" }}>
+                <div>
+                  <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "0.75rem" }}>Funding Outlook</h3>
+                  <p style={{ fontSize: "0.95rem", lineHeight: 1.6 }}>
+                    {getSummaryContent("funding_outlook") ||
+                      "Funding outlook will appear here once the agents synthesize their view."}
+                  </p>
+                </div>
+                <div>
+                  <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "0.75rem" }}>Market Position</h3>
+                  <p style={{ fontSize: "0.95rem", lineHeight: 1.6 }}>
+                    {getSummaryContent("market_position") ||
+                      "Market positioning analysis will surface here after the run completes."}
+                  </p>
+                </div>
+              </div>
             </>
           )}
         </div>
@@ -943,16 +1009,6 @@ export default function App() {
             </div>
           )}
 
-          {recentNewsItems.length > 0 && (
-            <div style={{ marginTop: "2rem" }}>
-              <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Recent Headlines</h3>
-              <ul style={{ paddingLeft: "1.25rem", lineHeight: 1.7 }}>
-                {recentNewsItems.map((item: string, index: number) => (
-                  <li key={`${item}-${index}`}>{item}</li>
-                ))}
-              </ul>
-            </div>
-          )}
         </div>
       </ExpandedModal>
     </div>
