@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAction, useQuery, useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
 import {
@@ -22,12 +22,13 @@ import AgentCard from "./components/AgentCard";
 import { BackgroundCircles } from "@/components/BackgroundCircles";
 import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { FundingChart } from "@/components/FundingChart";
-import { MarketDonutChart } from "@/components/MarketDonutChart";
+import { LatestFundingStat } from "@/components/LatestFundingStat";
+import { HypeMetricsChart } from "@/components/HypeMetricsChart";
 import { AddAgentModal } from "@/components/AddAgentModal";
 import { PortfolioPage } from "@/components/PortfolioPage";
 import { AgentSummary } from "@/components/AgentSummary";
 import { ExpandedModal } from "@/components/ExpandedModal";
+import { parseHypeNumbers, getLatestFundingMetric, formatMetricValue, ParsedMetric } from "@/utils/hype";
 import "./App.css";
 
 const AGENTS = [
@@ -69,22 +70,6 @@ const AGENTS = [
   },
 ];
 
-// Sample funding data - in production this would come from your API
-const SAMPLE_FUNDING_DATA = [
-  { date: 'Q1 2021', amount: 500000 },
-  { date: 'Q3 2021', amount: 2000000 },
-  { date: 'Q1 2022', amount: 5000000 },
-  { date: 'Q4 2022', amount: 15000000 },
-  { date: 'Q2 2023', amount: 35000000 },
-];
-
-// Sample market size data - in production this would come from your API
-const SAMPLE_MARKET_DATA = [
-  { name: 'TAM', label: 'Total Addressable Market', value: 50000000000 },
-  { name: 'SAM', label: 'Serviceable Available Market', value: 15000000000 },
-  { name: 'SOM', label: 'Serviceable Obtainable Market', value: 3000000000 },
-];
-
 // Global debug flag - set window.DEBUG = true in devtools
 declare global {
   interface Window {
@@ -122,15 +107,14 @@ export default function App() {
   const portfolioCompanies = useQuery(api.queries.getPortfolioCompanies);
 
   const handleAddToPortfolio = async () => {
-    if (!searchedStartup || !scrapedData) return;
+    if (!searchedStartup || !parsedScrapedData) return;
 
     try {
-      const parsedData = JSON.parse(scrapedData.data);
       await addToPortfolioMutation({
         startupName: searchedStartup,
-        website: parsedData.website,
-        bio: parsedData.bio,
-        summary: parsedData.summary,
+        website: parsedScrapedData.website,
+        bio: parsedScrapedData.bio,
+        summary: parsedScrapedData.summary,
       });
     } catch (error) {
       console.error("Error adding to portfolio:", error);
@@ -166,6 +150,52 @@ export default function App() {
   );
   const dbAgents = useQuery(api.queries.getAgents);
 
+  const parsedScrapedData = useMemo(() => {
+    if (!scrapedData?.data) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(scrapedData.data);
+    } catch (error) {
+      console.error("Failed to parse scraped data", error);
+      return null;
+    }
+  }, [scrapedData]);
+
+  const hypeNumbersText = parsedScrapedData?.hype?.numbers ?? null;
+  const hypeMetrics = useMemo(() => parseHypeNumbers(hypeNumbersText), [hypeNumbersText]);
+  const latestFundingMetric = useMemo(() => getLatestFundingMetric(hypeMetrics), [hypeMetrics]);
+  const hypeSummary = parsedScrapedData?.hype?.summary ?? "";
+  const hypeRecentNews = parsedScrapedData?.hype?.recentNews ?? "";
+  const isHypeLoading = searchedStartup ? scrapedData === undefined : false;
+  const recentNewsItems = useMemo(() => {
+    if (!hypeRecentNews) {
+      return [] as string[];
+    }
+
+    return hypeRecentNews
+      .replace(/•/g, "\n")
+      .split(/[\r\n]+/)
+      .map((item: string) => item.replace(/^[\s\-\*•\u2022]+/, "").trim())
+      .filter(Boolean);
+  }, [hypeRecentNews]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    if (showPortfolio) {
+      const previousOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = previousOverflow;
+      };
+    }
+
+    document.body.style.overflow = "";
+  }, [showPortfolio]);
+
+  
   // Seed default agents on mount
   useEffect(() => {
     void seedDefaultAgents();
@@ -541,7 +571,9 @@ export default function App() {
                 </button>
               </div>
               <div className="dashboard__tile-body" style={{ paddingTop: '0.5rem' }}>
-                <MarketDonutChart data={SAMPLE_MARKET_DATA} />
+                <div style={{ height: "220px" }}>
+                  <HypeMetricsChart metrics={hypeMetrics} />
+                </div>
               </div>
             </article>
 
@@ -623,7 +655,11 @@ export default function App() {
                 </button>
               </div>
               <div className="dashboard__tile-body" style={{ paddingTop: '1rem' }}>
-                <FundingChart data={SAMPLE_FUNDING_DATA} />
+                <LatestFundingStat
+                  latestMetric={latestFundingMetric}
+                  metrics={hypeMetrics}
+                  isLoading={isHypeLoading}
+                />
               </div>
             </article>
 
@@ -736,11 +772,11 @@ export default function App() {
           ) : getSummaryContent("founder_story") ? (
             <>
               <p style={{ marginBottom: "1.5rem" }}>{getSummaryContent("founder_story")}</p>
-              {scrapedData && JSON.parse(scrapedData.data).founders && (
+              {parsedScrapedData?.founders && (
                 <div>
                   <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Founder Profiles</h3>
-                  {JSON.parse(scrapedData.data).founders.map((founder: any, idx: number) => (
-                    <div key={idx} style={{ marginBottom: "1.5rem", paddingBottom: "1.5rem", borderBottom: idx < JSON.parse(scrapedData.data).founders.length - 1 ? "1px solid var(--color-border)" : "none" }}>
+                  {parsedScrapedData.founders.map((founder: any, idx: number) => (
+                    <div key={idx} style={{ marginBottom: "1.5rem", paddingBottom: "1.5rem", borderBottom: idx < parsedScrapedData.founders.length - 1 ? "1px solid var(--color-border)" : "none" }}>
                       <h4 style={{ fontWeight: 600, marginBottom: "0.5rem" }}>{founder.name}</h4>
                       {founder.bio && <p style={{ marginBottom: "0.5rem" }}>{founder.bio}</p>}
                       {(founder.linkedin || founder.twitter) && (
@@ -768,31 +804,48 @@ export default function App() {
         icon={<Target />}
       >
         <div>
-          <MarketDonutChart data={SAMPLE_MARKET_DATA} />
+          <div style={{ height: "260px", maxHeight: "320px" }}>
+            <HypeMetricsChart metrics={hypeMetrics} />
+          </div>
           <div style={{ marginTop: "2rem" }}>
-            <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Market Analysis</h3>
-            <div style={{ display: "grid", gap: "1rem" }}>
-              {SAMPLE_MARKET_DATA.map((item) => (
-                <div key={item.name} style={{
-                  padding: "1rem",
-                  background: "var(--color-background)",
-                  borderRadius: "0.5rem",
-                  border: "1px solid var(--color-border)"
-                }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-                    <span style={{ fontWeight: 600 }}>{item.name}</span>
-                    <span style={{ fontSize: "1.2rem", fontWeight: 700 }}>
-                      ${(item.value / 1000000000).toFixed(1)}B
+            <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Metric Callouts</h3>
+            {hypeMetrics.length > 0 ? (
+              <div style={{ display: "grid", gap: "1rem" }}>
+                {hypeMetrics.slice(0, 4).map((metric: ParsedMetric, idx: number) => (
+                  <div
+                    key={`${metric.label}-${idx}`}
+                    style={{
+                      padding: "1rem",
+                      background: "var(--color-background)",
+                      borderRadius: "0.5rem",
+                      border: "1px solid var(--color-border)",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "0.35rem",
+                    }}
+                  >
+                    <span style={{ fontWeight: 600 }}>{metric.label}</span>
+                    <span style={{ fontSize: "0.95rem", color: "var(--color-muted-foreground)" }}>
+                      {formatMetricValue(metric)}
                     </span>
                   </div>
-                  <p style={{ fontSize: "0.9rem", color: "var(--color-muted-foreground)" }}>{item.label}</p>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <p style={{ fontSize: "0.95rem", color: "var(--color-muted-foreground)" }}>
+                Metrics will populate after hype research collects traction numbers.
+              </p>
+            )}
             <p style={{ marginTop: "1.5rem", fontSize: "0.95rem", lineHeight: 1.6 }}>
               {getSummaryContent("market_position") || "Market position analysis will appear here once the analysis is complete."}
             </p>
           </div>
+          {hypeSummary && (
+            <div style={{ marginTop: "2rem" }}>
+              <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Hype Narrative</h3>
+              <p style={{ fontSize: "0.95rem", lineHeight: 1.6 }}>{hypeSummary}</p>
+            </div>
+          )}
         </div>
       </ExpandedModal>
 
@@ -808,6 +861,13 @@ export default function App() {
             <p>Loading funding information...</p>
           ) : (
             <>
+              <div style={{ marginBottom: "2rem" }}>
+                <LatestFundingStat
+                  latestMetric={latestFundingMetric}
+                  metrics={hypeMetrics}
+                  isLoading={isHypeLoading}
+                />
+              </div>
               <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Funding Assessment</h3>
               <p style={{ marginBottom: "1.5rem" }}>
                 {getSummaryContent("funding_outlook") || "Funding outlook will appear here once the analysis is complete."}
@@ -822,10 +882,30 @@ export default function App() {
                 <li>Next round timing and valuation expectations</li>
               </ul>
 
-              {scrapedData && (
+              {parsedScrapedData && (
                 <div style={{ marginTop: "2rem" }}>
                   <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Company Overview</h3>
-                  <p>{JSON.parse(scrapedData.data).summary}</p>
+                  <div
+                    style={{
+                      maxHeight: "220px",
+                      overflowY: "auto",
+                      paddingRight: "0.75rem",
+                      marginRight: "-0.75rem",
+                    }}
+                  >
+                    <p style={{ margin: 0 }}>{parsedScrapedData.summary}</p>
+                  </div>
+                </div>
+              )}
+
+              {recentNewsItems.length > 0 && (
+                <div style={{ marginTop: "2rem" }}>
+                  <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Recent Headlines</h3>
+                  <ul style={{ paddingLeft: "1.25rem", lineHeight: 1.7 }}>
+                    {recentNewsItems.map((item: string, index: number) => (
+                      <li key={`${item}-${index}`}>{item}</li>
+                    ))}
+                  </ul>
                 </div>
               )}
             </>
@@ -841,36 +921,38 @@ export default function App() {
         icon={<TrendingUp />}
       >
         <div>
-          <FundingChart data={SAMPLE_FUNDING_DATA} />
-          <div style={{ marginTop: "2rem" }}>
-            <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Funding History</h3>
-            <div style={{ display: "grid", gap: "1rem" }}>
-              {SAMPLE_FUNDING_DATA.map((round, idx) => (
-                <div key={idx} style={{
-                  padding: "1rem",
-                  background: "var(--color-background)",
-                  borderRadius: "0.5rem",
-                  border: "1px solid var(--color-border)",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center"
-                }}>
-                  <span>{round.date}</span>
-                  <span style={{ fontWeight: 600, fontSize: "1.1rem" }}>
-                    ${(round.amount / 1000000).toFixed(1)}M
-                  </span>
-                </div>
-              ))}
-            </div>
+          <div>
+            <LatestFundingStat
+              latestMetric={latestFundingMetric}
+              metrics={hypeMetrics}
+              isLoading={isHypeLoading}
+            />
+          </div>
 
-            <div style={{ marginTop: "2rem" }}>
-              <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Growth Trajectory</h3>
-              <p style={{ fontSize: "0.95rem", lineHeight: 1.6 }}>
-                The company has raised a total of ${SAMPLE_FUNDING_DATA.reduce((sum, r) => sum + r.amount, 0) / 1000000}M
-                across {SAMPLE_FUNDING_DATA.length} funding rounds, showing consistent investor confidence and growth momentum.
-              </p>
+          <div style={{ marginTop: "2rem" }}>
+            <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Funding Metrics</h3>
+            <div style={{ height: "260px", maxHeight: "320px" }}>
+              <HypeMetricsChart metrics={hypeMetrics} />
             </div>
           </div>
+
+          {hypeSummary && (
+            <div style={{ marginTop: "2rem" }}>
+              <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Narrative</h3>
+              <p style={{ fontSize: "0.95rem", lineHeight: 1.6 }}>{hypeSummary}</p>
+            </div>
+          )}
+
+          {recentNewsItems.length > 0 && (
+            <div style={{ marginTop: "2rem" }}>
+              <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Recent Headlines</h3>
+              <ul style={{ paddingLeft: "1.25rem", lineHeight: 1.7 }}>
+                {recentNewsItems.map((item: string, index: number) => (
+                  <li key={`${item}-${index}`}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       </ExpandedModal>
     </div>

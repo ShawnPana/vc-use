@@ -112,18 +112,31 @@ export const scrapeStartupData = action({
 
       // Extract and format the data from backend
       const companyData = result.company;
+
+      if (!companyData) {
+        throw new Error("Backend analysis returned no company data");
+      }
+      const hypeData = result.hype;
+
       const scrapedData = {
         startupName: args.startupName,
         website: companyData.company_website,
         bio: companyData.company_bio,
         summary: companyData.company_summary,
-        founders: companyData.founders_info.founders.map((f: any) => ({
+        founders: (companyData.founders_info?.founders || []).map((f: any) => ({
           name: f.name,
           linkedin: f.social_media?.linkedin,
           twitter: f.social_media?.X,
           personalWebsite: f.personal_website,
           bio: f.bio,
         })),
+        hype: hypeData
+          ? {
+              summary: hypeData.hype_summary,
+              numbers: hypeData.numbers,
+              recentNews: hypeData.recent_news,
+            }
+          : null,
       };
 
       // Store scraped data
