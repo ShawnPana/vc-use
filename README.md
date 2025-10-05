@@ -17,16 +17,7 @@ Venture capital scouts and analysts spend 20-40 hours per week on tedious, repet
 - **Unlimited custom agents**: Power users can create dozens of specialized agents for vertical-specific workflows
 - **User authentication**: Personal portfolios and custom agent flows
 - **Real-time updates**: Powered by Convex, a real-time noSQL database
-
-### Key Features
-
-- AI-powered startup analysis with multiple specialized agents
-- Executive summary generation from agent insights
-- Founder story and company overview extraction
-- Market opportunity visualization
-- Funding progress tracking
-- Portfolio management for tracking multiple startups
-- Expandable dashboard tiles for detailed views
+- **Portfolio Management**: For tracking multiple startups
 
 ### Tech Stack
 
