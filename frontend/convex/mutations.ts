@@ -254,6 +254,7 @@ export const deleteAgent = mutation({
 
 export const seedAgentsIfEmpty = mutation({
   args: {
+    userId: v.string(),
     agents: v.array(
       v.object({
         agentId: v.string(),
@@ -267,21 +268,16 @@ export const seedAgentsIfEmpty = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("User must be authenticated");
-    }
-
     const existingAgents = await ctx.db
       .query("agents")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .collect();
 
     // Only seed if user has no agents
     if (existingAgents.length === 0) {
       for (const agent of args.agents) {
         await ctx.db.insert("agents", {
-          userId,
+          userId: args.userId,
           ...agent,
         });
       }
