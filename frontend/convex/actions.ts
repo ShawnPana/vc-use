@@ -252,8 +252,8 @@ export const analyzeStartup = action({
           agentId: agent.id,
           name: agent.name,
           prompt: agent.prompt,
-          icon: agent.id, // Store icon name as string
-          accent: "", // Will be set from frontend
+          icon: agent.icon,
+          accent: agent.accent,
           isActive: true,
           order: index,
         });
