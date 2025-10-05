@@ -1,6 +1,5 @@
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { getAuthUserId } from "@convex-dev/auth/server";
 
 export const createAnalysis = mutation({
   args: {
@@ -9,10 +8,11 @@ export const createAnalysis = mutation({
     agentName: v.string(),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
       throw new Error("User must be authenticated");
     }
+    const userId = identity.subject;
 
     const existingAnalysis = await ctx.db
       .query("analyses")
@@ -63,10 +63,11 @@ export const createSummary = mutation({
     content: v.string(),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
       throw new Error("User must be authenticated");
     }
+    const userId = identity.subject;
 
     return await ctx.db.insert("summaries", {
       userId,
@@ -84,10 +85,11 @@ export const storeScrapedData = mutation({
     data: v.string(),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
       throw new Error("User must be authenticated");
     }
+    const userId = identity.subject;
 
     const existing = await ctx.db
       .query("scrapedData")
@@ -122,10 +124,11 @@ export const upsertAgent = mutation({
     order: v.number(),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
       throw new Error("User must be authenticated");
     }
+    const userId = identity.subject;
 
     const existing = await ctx.db
       .query("agents")
@@ -166,10 +169,11 @@ export const updateAgentPrompt = mutation({
     accent: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
       throw new Error("User must be authenticated");
     }
+    const userId = identity.subject;
 
     const agent = await ctx.db
       .query("agents")
@@ -209,10 +213,11 @@ export const toggleAgentActive = mutation({
     isActive: v.boolean(),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
       throw new Error("User must be authenticated");
     }
+    const userId = identity.subject;
 
     const agent = await ctx.db
       .query("agents")
@@ -234,10 +239,11 @@ export const deleteAgent = mutation({
     agentId: v.string(),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
       throw new Error("User must be authenticated");
     }
+    const userId = identity.subject;
 
     const agent = await ctx.db
       .query("agents")
@@ -296,10 +302,11 @@ export const addToPortfolio = mutation({
     summary: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
       throw new Error("User must be authenticated");
     }
+    const userId = identity.subject;
 
     // Check if already in portfolio
     const existing = await ctx.db
@@ -329,10 +336,11 @@ export const removeFromPortfolio = mutation({
     startupName: v.string(),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
       throw new Error("User must be authenticated");
     }
+    const userId = identity.subject;
 
     const company = await ctx.db
       .query("portfolio")
