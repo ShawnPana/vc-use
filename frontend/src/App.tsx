@@ -113,7 +113,7 @@ function MainApp() {
   }, []);
 
   const analyzeStartup = useAction(api.actions.analyzeStartup);
-  const seedDefaultAgents = useAction(api.actions.seedDefaultAgents);
+  const initializeMyAgents = useMutation(api.mutations.initializeMyAgents);
   const addToPortfolioMutation = useMutation(api.mutations.addToPortfolio);
   const removeFromPortfolioMutation = useMutation(api.mutations.removeFromPortfolio);
   const portfolioCompanies = useQuery(api.queries.getPortfolioCompanies);
@@ -214,11 +214,17 @@ function MainApp() {
     document.body.style.overflow = "";
   }, [showPortfolio]);
 
-  
-  // Seed default agents on mount
+
+  // Initialize agents for current user on mount
   useEffect(() => {
-    void seedDefaultAgents();
-  }, [seedDefaultAgents]);
+    initializeMyAgents()
+      .then((result) => {
+        console.log("Agent initialization result:", result);
+      })
+      .catch((error) => {
+        console.error("Failed to initialize agents:", error);
+      });
+  }, [initializeMyAgents]);
 
   const handleAnalyze = async () => {
     if (!startupName.trim()) return;
