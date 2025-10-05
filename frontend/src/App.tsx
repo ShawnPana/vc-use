@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
-import { useAction, useQuery, useMutation, Authenticated, Unauthenticated } from "convex/react";
-import { useAuthActions } from "@convex-dev/auth/react";
+import { useAction, useQuery, useMutation } from "convex/react";
+import { useAuthActions, useAuthToken } from "@convex-dev/auth/react";
 import { api } from "../convex/_generated/api";
 import { AuthPage } from "@/components/AuthPage";
 import {
@@ -1189,14 +1189,7 @@ function MainApp() {
 }
 
 export default function App() {
-  return (
-    <>
-      <Unauthenticated>
-        <AuthPage />
-      </Unauthenticated>
-      <Authenticated>
-        <MainApp />
-      </Authenticated>
-    </>
-  );
+  const token = useAuthToken();
+
+  return token ? <MainApp /> : <AuthPage />;
 }
