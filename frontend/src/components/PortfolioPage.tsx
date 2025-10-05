@@ -1,6 +1,6 @@
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { Bookmark, BookmarkCheck, ArrowLeft } from "lucide-react";
+import { BookmarkCheck, ArrowLeft } from "lucide-react";
 
 interface PortfolioPageProps {
   onSelectCompany: (companyName: string) => void;

@@ -5,6 +5,7 @@ interface MarketData {
   name: string;
   value: number;
   label: string;
+  [key: string]: string | number;
 }
 
 interface MarketDonutChartProps {
@@ -77,7 +78,7 @@ export function MarketDonutChart({ data }: MarketDonutChartProps) {
           paddingAngle={2}
           dataKey="value"
         >
-          {data.map((entry, index) => (
+          {data.map((_, index) => (
             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
           ))}
         </Pie>
@@ -89,7 +90,7 @@ export function MarketDonutChart({ data }: MarketDonutChartProps) {
             fontSize: '0.875rem',
             color: textColor,
           }}
-          formatter={(value: number, name: string, props: any) => [
+          formatter={(value: number, _name: string, props: any) => [
             formatCurrency(value),
             props.payload.label
           ]}

@@ -11,7 +11,7 @@ export function AddAgentModal({ onClose }: AddAgentModalProps) {
   const [agentId, setAgentId] = useState("");
   const [name, setName] = useState("");
   const [prompt, setPrompt] = useState("");
-  const [icon, setIcon] = useState("brain");
+  const [icon] = useState("brain");
   const [accent, setAccent] = useState("#818cf8");
 
   const upsertAgent = useMutation(api.mutations.upsertAgent);

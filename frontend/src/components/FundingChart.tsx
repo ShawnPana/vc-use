@@ -18,7 +18,6 @@ export function FundingChart({ data }: FundingChartProps) {
 
   const gridColor = isDark ? '#333333' : '#e5e7eb';
   const areaColor = isDark ? '#60a5fa' : '#3b82f6';
-  const areaFillColor = isDark ? 'rgba(96, 165, 250, 0.2)' : 'rgba(59, 130, 246, 0.2)';
   const textColor = isDark ? '#a1a1aa' : '#71717a';
   const tooltipBg = isDark ? '#1f1f1f' : '#ffffff';
   const tooltipBorder = isDark ? '#404040' : '#e5e7eb';
