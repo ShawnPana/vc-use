@@ -1,5 +1,41 @@
 # VC Use  <img src="frontend/public/logo.svg" alt="VC Use Logo" width="32" height="32" style="vertical-align: bottom; margin-left: 8px;">
 
+**Comprehensive, agentic startup analysis in minutes.** Deployed at https://vc-use.dev. 
+
+## Overview
+
+VC-Use automates venture capital due diligence using a multi-agent AI system. Research agents deliver structured insights in minutes instead of weeks.
+
+### The Problem
+
+Venture capital scouts and analysts spend 20-40 hours per week on tedious, repetitive research across scattered sources. Traditional tools like Pitchbook and Crunchbase miss 60-70% of early-stage startups, and VCs have no systematic framework for conducting thorough, unbiased analysis across financial, legal, market, competitive, team, and technical dimensions.
+
+### The Solution
+
+- **Multi-agent architecture**: Specialized agents analyze any company
+- **Web-powered research**: Works for companies missing from traditional databases
+- **Unlimited custom agents**: Power users can create dozens of specialized agents for vertical-specific workflows
+- **User authentication**: Personal portfolios and custom agent flows
+- **Real-time updates**: Powered by Convex, a real-time noSQL database
+
+### Key Features
+
+- AI-powered startup analysis with multiple specialized agents
+- Executive summary generation from agent insights
+- Founder story and company overview extraction
+- Market opportunity visualization
+- Funding progress tracking
+- Portfolio management for tracking multiple startups
+- Expandable dashboard tiles for detailed views
+
+### Tech Stack
+
+- **Frontend:** React, TypeScript, Vite, Convex (real-time database + auth)
+- **Backend:** Python, FastAPI, Browser Use (web scraping)
+- **AI Infrastructure:** Cerebras Inference API running Llama 3.3 70B
+- **Database:** Convex
+---
+
 ## Setup Instructions
 1. Clone the repository into your local machine.
 2. In the `backend` directory, create a .env file based on the `.env.example` file and fill in the required environment variables.
