@@ -26,7 +26,7 @@ This project adheres to a Code of Conduct that all contributors are expected to 
    ```
 3. **Add upstream remote**:
    ```bash
-   git remote add upstream https://github.com/ORIGINAL_OWNER/vc-use.git
+   git remote add upstream https://github.com/ShawnPana/vc-use.git
    ```
 
 ## Development Setup
