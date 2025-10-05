@@ -1,5 +1,6 @@
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
 export const createAnalysis = mutation({
   args: {
@@ -8,10 +9,15 @@ export const createAnalysis = mutation({
     agentName: v.string(),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("User must be authenticated");
+    }
+
     const existingAnalysis = await ctx.db
       .query("analyses")
-      .withIndex("by_startup_and_agent", (q) =>
-        q.eq("startupName", args.startupName).eq("agentId", args.agentId)
+      .withIndex("by_user_startup_and_agent", (q) =>
+        q.eq("userId", userId).eq("startupName", args.startupName).eq("agentId", args.agentId)
       )
       .first();
 
@@ -24,6 +30,7 @@ export const createAnalysis = mutation({
     }
 
     return await ctx.db.insert("analyses", {
+      userId,
       startupName: args.startupName,
       agentId: args.agentId,
       agentName: args.agentName,
@@ -56,7 +63,13 @@ export const createSummary = mutation({
     content: v.string(),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("User must be authenticated");
+    }
+
     return await ctx.db.insert("summaries", {
+      userId,
       startupName: args.startupName,
       summaryType: args.summaryType,
       content: args.content,
@@ -71,9 +84,14 @@ export const storeScrapedData = mutation({
     data: v.string(),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("User must be authenticated");
+    }
+
     const existing = await ctx.db
       .query("scrapedData")
-      .withIndex("by_startup", (q) => q.eq("startupName", args.startupName))
+      .withIndex("by_user_and_startup", (q) => q.eq("userId", userId).eq("startupName", args.startupName))
       .first();
 
     if (existing) {
@@ -85,6 +103,7 @@ export const storeScrapedData = mutation({
     }
 
     return await ctx.db.insert("scrapedData", {
+      userId,
       startupName: args.startupName,
       data: args.data,
       timestamp: Date.now(),
@@ -103,9 +122,14 @@ export const upsertAgent = mutation({
     order: v.number(),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("User must be authenticated");
+    }
+
     const existing = await ctx.db
       .query("agents")
-      .withIndex("by_agent_id", (q) => q.eq("agentId", args.agentId))
+      .withIndex("by_user_and_agent_id", (q) => q.eq("userId", userId).eq("agentId", args.agentId))
       .first();
 
     if (existing) {
@@ -121,6 +145,7 @@ export const upsertAgent = mutation({
     }
 
     return await ctx.db.insert("agents", {
+      userId,
       agentId: args.agentId,
       name: args.name,
       prompt: args.prompt,
@@ -141,17 +166,26 @@ export const updateAgentPrompt = mutation({
     accent: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("User must be authenticated");
+    }
+
     const agent = await ctx.db
       .query("agents")
-      .withIndex("by_agent_id", (q) => q.eq("agentId", args.agentId))
+      .withIndex("by_user_and_agent_id", (q) => q.eq("userId", userId).eq("agentId", args.agentId))
       .first();
 
     if (!agent) {
       // Agent doesn't exist yet - create it
-      const maxOrder = (await ctx.db.query("agents").collect())
-        .reduce((max, a) => Math.max(max, a.order), -1);
+      const userAgents = await ctx.db
+        .query("agents")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .collect();
+      const maxOrder = userAgents.reduce((max, a) => Math.max(max, a.order), -1);
 
       await ctx.db.insert("agents", {
+        userId,
         agentId: args.agentId,
         name: args.name || args.agentId,
         prompt: args.prompt,
@@ -175,9 +209,14 @@ export const toggleAgentActive = mutation({
     isActive: v.boolean(),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("User must be authenticated");
+    }
+
     const agent = await ctx.db
       .query("agents")
-      .withIndex("by_agent_id", (q) => q.eq("agentId", args.agentId))
+      .withIndex("by_user_and_agent_id", (q) => q.eq("userId", userId).eq("agentId", args.agentId))
       .first();
 
     if (!agent) {
@@ -195,9 +234,14 @@ export const deleteAgent = mutation({
     agentId: v.string(),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("User must be authenticated");
+    }
+
     const agent = await ctx.db
       .query("agents")
-      .withIndex("by_agent_id", (q) => q.eq("agentId", args.agentId))
+      .withIndex("by_user_and_agent_id", (q) => q.eq("userId", userId).eq("agentId", args.agentId))
       .first();
 
     if (!agent) {
@@ -223,12 +267,23 @@ export const seedAgentsIfEmpty = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    const existingAgents = await ctx.db.query("agents").collect();
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("User must be authenticated");
+    }
 
-    // Only seed if database is empty
+    const existingAgents = await ctx.db
+      .query("agents")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+
+    // Only seed if user has no agents
     if (existingAgents.length === 0) {
       for (const agent of args.agents) {
-        await ctx.db.insert("agents", agent);
+        await ctx.db.insert("agents", {
+          userId,
+          ...agent,
+        });
       }
       return { seeded: true, count: args.agents.length };
     }
@@ -245,10 +300,15 @@ export const addToPortfolio = mutation({
     summary: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("User must be authenticated");
+    }
+
     // Check if already in portfolio
     const existing = await ctx.db
       .query("portfolio")
-      .withIndex("by_startup", (q) => q.eq("startupName", args.startupName))
+      .withIndex("by_user_and_startup", (q) => q.eq("userId", userId).eq("startupName", args.startupName))
       .first();
 
     if (existing) {
@@ -256,6 +316,7 @@ export const addToPortfolio = mutation({
     }
 
     const portfolioId = await ctx.db.insert("portfolio", {
+      userId,
       startupName: args.startupName,
       addedAt: Date.now(),
       website: args.website,
@@ -272,9 +333,14 @@ export const removeFromPortfolio = mutation({
     startupName: v.string(),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("User must be authenticated");
+    }
+
     const company = await ctx.db
       .query("portfolio")
-      .withIndex("by_startup", (q) => q.eq("startupName", args.startupName))
+      .withIndex("by_user_and_startup", (q) => q.eq("userId", userId).eq("startupName", args.startupName))
       .first();
 
     if (!company) {

@@ -233,11 +233,12 @@ export const analyzeWithCerebras = action({
 export const analyzeStartup = action({
   args: { startupName: v.string(), debug: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
-    // First, scrape the data
-    const scrapedData = await ctx.runAction(api.actions.scrapeStartupData, {
-      startupName: args.startupName,
-      debug: args.debug,
-    });
+    try {
+      // First, scrape the data
+      const scrapedData = await ctx.runAction(api.actions.scrapeStartupData, {
+        startupName: args.startupName,
+        debug: args.debug,
+      });
 
     const scrapedDataString = JSON.stringify(scrapedData);
 
@@ -295,13 +296,21 @@ export const analyzeStartup = action({
       }
     }
 
-    // Generate summaries
-    await ctx.runAction(api.actions.generateSummaries, {
-      startupName: args.startupName,
-      scrapedData: scrapedDataString,
-    });
+      // Generate summaries
+      await ctx.runAction(api.actions.generateSummaries, {
+        startupName: args.startupName,
+        scrapedData: scrapedDataString,
+      });
 
-    return { success: true };
+      return { success: true };
+    } catch (error) {
+      console.error("Error in analyzeStartup:", error);
+      // Re-throw with a more helpful message if it's an auth error
+      if (error instanceof Error && error.message.includes("must be authenticated")) {
+        throw new Error("You must be signed in to analyze startups.");
+      }
+      throw error;
+    }
   },
 });
 
