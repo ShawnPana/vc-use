@@ -1,6 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { useAction, useQuery, useMutation } from "convex/react";
+import { useAuthActions } from "@convex-dev/auth/react";
+import { Authenticated, Unauthenticated } from "convex/react";
 import { api } from "../convex/_generated/api";
+import { AuthPage } from "@/components/AuthPage";
 import {
   TrendingDown,
   TrendingUp,
@@ -16,6 +19,7 @@ import {
   Bookmark,
   BookmarkCheck,
   Expand,
+  LogOut,
 } from "lucide-react";
 import AgentCard from "./components/AgentCard";
 import { BackgroundCircles } from "@/components/BackgroundCircles";
@@ -86,7 +90,7 @@ declare global {
   }
 }
 
-export default function App() {
+function MainApp() {
   const [startupName, setStartupName] = useState("");
   const [searchedStartup, setSearchedStartup] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -94,6 +98,9 @@ export default function App() {
   const [showPortfolio, setShowPortfolio] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
   const [expandedTile, setExpandedTile] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const { signOut } = useAuthActions();
 
   // Expose debug setter to window for devtools access
   useEffect(() => {
@@ -221,11 +228,26 @@ export default function App() {
 
     setSearchedStartup(startupName);
     setIsAnalyzing(true);
+    setErrorMessage(null);
 
     try {
       await analyzeStartup({ startupName, debug: debugMode });
     } catch (error) {
       console.error("Analysis error:", error);
+      let message = "Failed to analyze startup. Please try again.";
+
+      if (error instanceof Error) {
+        if (error.message.includes("must be authenticated") || error.message.includes("signed in")) {
+          message = "You must be signed in to analyze startups.";
+        } else if (error.message.includes("BACKEND_API_KEY")) {
+          message = "Backend API is not configured. Please contact support.";
+        } else if (!error.message.includes("Server Error") && !error.message.includes("Uncaught")) {
+          message = error.message;
+        }
+      }
+
+      setErrorMessage(message);
+      setSearchedStartup(null);
     } finally {
       setIsAnalyzing(false);
     }
@@ -285,43 +307,124 @@ export default function App() {
     <div className="app-container">
       <ThemeToggle />
 
-      {/* Portfolio Tab Button */}
-      <button
-        onClick={() => setShowPortfolio(true)}
-        style={{
-          position: "fixed",
-          top: "1.5rem",
-          right: "5rem",
-          background: "var(--color-card)",
-          border: "1px solid var(--color-border)",
-          borderRadius: "0.5rem",
-          padding: "0.625rem 1rem",
-          cursor: "pointer",
-          color: "var(--color-foreground)",
-          fontSize: "0.9rem",
-          fontWeight: 500,
-          display: "flex",
-          alignItems: "center",
-          gap: "0.5rem",
-          transition: "all 0.2s",
-          zIndex: 100,
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = "var(--color-foreground)";
-          e.currentTarget.style.color = "var(--color-background)";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = "var(--color-card)";
-          e.currentTarget.style.color = "var(--color-foreground)";
-        }}
-      >
-        <Bookmark size={16} />
-        Portfolio ({portfolioCompanies?.length || 0})
-      </button>
+      {/* User Controls - Top Right */}
+      <div style={{
+        position: "fixed",
+        top: "1.5rem",
+        right: "5rem",
+        display: "flex",
+        gap: "0.75rem",
+        zIndex: 100,
+      }}>
+        {/* Portfolio Tab Button */}
+        <button
+          onClick={() => setShowPortfolio(true)}
+          style={{
+            background: "var(--color-card)",
+            border: "1px solid var(--color-border)",
+            borderRadius: "0.5rem",
+            padding: "0.625rem 1rem",
+            cursor: "pointer",
+            color: "var(--color-foreground)",
+            fontSize: "0.9rem",
+            fontWeight: 500,
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            transition: "all 0.2s",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "var(--color-foreground)";
+            e.currentTarget.style.color = "var(--color-background)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "var(--color-card)";
+            e.currentTarget.style.color = "var(--color-foreground)";
+          }}
+        >
+          <Bookmark size={16} />
+          Portfolio ({portfolioCompanies?.length || 0})
+        </button>
+
+        {/* Sign Out Button */}
+        <button
+          onClick={() => void signOut()}
+          style={{
+            background: "var(--color-card)",
+            border: "1px solid var(--color-border)",
+            borderRadius: "0.5rem",
+            padding: "0.625rem 1rem",
+            cursor: "pointer",
+            color: "var(--color-foreground)",
+            fontSize: "0.9rem",
+            fontWeight: 500,
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            transition: "all 0.2s",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "#ef4444";
+            e.currentTarget.style.borderColor = "#ef4444";
+            e.currentTarget.style.color = "white";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "var(--color-card)";
+            e.currentTarget.style.borderColor = "var(--color-border)";
+            e.currentTarget.style.color = "var(--color-foreground)";
+          }}
+          title="Sign Out"
+        >
+          <LogOut size={16} />
+        </button>
+      </div>
 
       <BackgroundCircles />
 
       <main className="app-main">
+        {/* Error Alert */}
+        {errorMessage && (
+          <div
+            style={{
+              position: "fixed",
+              top: "5rem",
+              left: "50%",
+              transform: "translateX(-50%)",
+              maxWidth: "500px",
+              width: "90%",
+              padding: "1rem 1.5rem",
+              background: "#fee2e2",
+              border: "1px solid #ef4444",
+              borderRadius: "0.75rem",
+              color: "#991b1b",
+              fontSize: "0.95rem",
+              fontWeight: 500,
+              zIndex: 1000,
+              boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: "1rem",
+            }}
+          >
+            <span>{errorMessage}</span>
+            <button
+              onClick={() => setErrorMessage(null)}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "#991b1b",
+                cursor: "pointer",
+                fontSize: "1.25rem",
+                lineHeight: 1,
+                padding: "0.25rem",
+              }}
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         {!searchedStartup && (
           <section className="hero" aria-labelledby="hero-heading">
             <div className="hero-logo">
@@ -500,10 +603,21 @@ export default function App() {
                   </div>
                 </div>
                 <h2 className="dashboard__headline-title">{searchedStartup}</h2>
-                <p className="dashboard__headline-subtitle">
+                <div
+                  className="dashboard__headline-subtitle"
+                  style={{
+                    maxHeight: "4.5rem",
+                    overflowY: "auto",
+                    paddingRight: "0.5rem",
+                    display: "block",
+                    WebkitLineClamp: "unset",
+                    WebkitBoxOrient: "unset",
+                    textOverflow: "clip",
+                  }}
+                >
                   {getSummaryContent("company_overview") ||
                     "Concise overview pending. Agents are compiling the company snapshot."}
-                </p>
+                </div>
               </div>
 
             </article>
@@ -1012,5 +1126,18 @@ export default function App() {
         </div>
       </ExpandedModal>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <>
+      <Unauthenticated>
+        <AuthPage />
+      </Unauthenticated>
+      <Authenticated>
+        <MainApp />
+      </Authenticated>
+    </>
   );
 }
