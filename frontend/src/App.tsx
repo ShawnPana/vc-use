@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useAction, useQuery, useMutation } from "convex/react";
-import { useAuthActions } from "@convex-dev/auth/react";
-import { Authenticated, Unauthenticated } from "convex/react";
+import { useAuthActions, Authenticated, Unauthenticated } from "@convex-dev/auth/react";
 import { api } from "../convex/_generated/api";
 import { AuthPage } from "@/components/AuthPage";
 import {

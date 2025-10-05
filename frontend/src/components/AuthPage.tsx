@@ -108,7 +108,7 @@ export function AuthPage() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={(e) => void handleSubmit(e)}>
           {isSignUp && (
             <div style={{ marginBottom: "1.25rem" }}>
               <label
