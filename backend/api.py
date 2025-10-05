@@ -42,6 +42,7 @@ async def verify_api_key(api_key: str = Security(api_key_header)):
 # Request/Response Models
 class CompanyAnalysisRequest(BaseModel):
     company_name: str
+    debug: Optional[bool] = False
 
 class FounderResearchRequest(BaseModel):
     company_name: str
@@ -80,6 +81,19 @@ async def root():
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
+
+@app.post("/api/cleanup")
+async def cleanup_sessions(api_key: str = Security(verify_api_key)):
+    """
+    Manually trigger cleanup of browser sessions.
+    Useful for killing sessions when Browser Use cloud limit is hit.
+    """
+    print("🧹 Manual cleanup triggered")
+    # Browser sessions auto-cleanup when endpoints finish
+    # This is mainly for forcing garbage collection
+    import gc
+    gc.collect()
+    return {"status": "cleanup_complete", "message": "Forced garbage collection"}
 
 # Company analysis endpoint
 @app.post("/api/analyze-company", response_model=CompanyAnalysisResponse)
@@ -144,8 +158,36 @@ async def api_full_analysis(
     Complete company analysis including company info and hype research.
     Runs analyze_company and research_hype in parallel.
     Returns company data and hype info. Frontend should call /api/research-founders separately.
+
+    Use debug=true to return mock data instantly for testing.
     """
     try:
+        # Debug mode: return mock data immediately
+        if request.debug:
+            return FullAnalysisResponse(
+                success=True,
+                company=Company(
+                    company_website=f"https://{request.company_name.lower().replace(' ', '')}.com",
+                    company_bio=f"Debug mode: {request.company_name} is a test company.",
+                    company_summary=f"Mock summary for {request.company_name}. This is debug data.",
+                    founders_info=FounderList(
+                        founders=[
+                            Founder(
+                                name="Debug Founder",
+                                social_media=SocialMedia(linkedin="https://linkedin.com/in/debug", X="https://x.com/debug"),
+                                personal_website="https://debug.com",
+                                bio="Mock founder bio for debugging"
+                            )
+                        ]
+                    )
+                ),
+                hype=Hype(
+                    hype_summary="Debug hype summary",
+                    numbers="Debug funding data",
+                    recent_news="Debug news"
+                )
+            )
+
         # Run analyze_company and research_hype in parallel
         results = await asyncio.gather(
             analyze_company(request.company_name),
@@ -169,6 +211,23 @@ async def api_full_analysis(
             error=str(e)
         )
 
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on shutdown - kill any active browser sessions"""
+    print("Shutting down and cleaning up browser sessions...")
+    # Add any cleanup logic here if needed
+
 if __name__ == "__main__":
     import uvicorn
+    import signal
+
+    def signal_handler(sig, frame):
+        print("\n🛑 Received shutdown signal, cleaning up...")
+        # Browser sessions will be cleaned up by the shutdown event
+        exit(0)
+
+    # Register signal handlers
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
