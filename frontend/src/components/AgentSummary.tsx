@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Sparkles } from "lucide-react";
 
 interface AgentAnalysis {
   agentId: string;
@@ -33,189 +34,140 @@ export function AgentSummary({ agents, startupName }: AgentSummaryProps) {
   }
 
   return (
-    <div style={{
+    <article className="agent-card" style={{
+      animationDelay: "0ms",
+      marginBottom: "1.5rem",
       background: "var(--color-card)",
       border: "1px solid var(--color-border)",
       borderRadius: "1rem",
-      padding: "1.5rem",
-      marginBottom: "2rem",
-      fontFamily: "monospace",
-      fontSize: "0.9rem",
-      lineHeight: 1.6,
-      color: "var(--color-muted-foreground)",
-      whiteSpace: "pre-wrap",
+      padding: "1.25rem",
     }}>
-      <div style={{
-        fontSize: "1.1rem",
-        fontWeight: 600,
-        color: "var(--color-foreground)",
-        marginBottom: "1rem",
-        borderBottom: "1px solid var(--color-border)",
-        paddingBottom: "0.5rem",
-      }}>
-        EXECUTIVE SUMMARY
+      <header className="agent-card__header">
+        <span
+          className="agent-card__icon"
+          style={{
+            background: "#818cf8",
+            color: "#0f172a",
+            boxShadow: "0 18px 30px -22px rgba(15, 23, 42, 0.55)",
+          }}
+          aria-hidden="true"
+        >
+          <Sparkles />
+        </span>
+        <div style={{ flex: 1 }}>
+          <h3 className="agent-card__title">Executive Summary</h3>
+          <div className="agent-card__status agent-card__status--complete">
+            <span>✓ Complete</span>
+          </div>
+        </div>
+      </header>
+
+      <div className="agent-card__content">
+        <p className="agent-card__body">{summaryText}</p>
       </div>
-      {summaryText}
-    </div>
+    </article>
   );
 }
 
-// Generate plain text summary
+// Generate comprehensive summary paragraph
 function generateSummaryText(agents: AgentAnalysis[], startupName: string): string {
-  const analyses = agents.map(a => a.analysis.toLowerCase());
+  // Extract key insights from analyses
+  const positiveKeywords = ["strong", "excellent", "promising", "innovative", "leading", "impressive", "solid", "growing", "successful", "advantage", "opportunity"];
+  const negativeKeywords = ["risk", "concern", "challenge", "difficult", "weak", "threat", "uncertain", "limited", "struggle", "competition"];
 
-  // Count sentiment indicators
-  const positiveKeywords = ["strong", "excellent", "promising", "innovative", "leading", "impressive", "solid", "growing", "successful", "advantage", "opportunity", "breakthrough", "exceptional"];
-  const negativeKeywords = ["risk", "concern", "challenge", "difficult", "weak", "threat", "uncertain", "limited", "struggle", "competition", "unclear", "lacking"];
+  let positivePoints: string[] = [];
+  let negativePoints: string[] = [];
+  let marketInsights: string[] = [];
 
+  agents.forEach(agent => {
+    const analysis = agent.analysis;
+
+    // Extract one key point from each agent type
+    if (agent.agentId === "believer") {
+      const match = analysis.match(/(?:particularly|especially|notably)\s+[^.]+/i);
+      if (match) positivePoints.push(match[0].toLowerCase());
+    }
+
+    if (agent.agentId === "skeptic") {
+      const match = analysis.match(/(?:concern|risk|challenge)\s+[^.]+/i);
+      if (match) negativePoints.push(match[0].toLowerCase());
+    }
+
+    if (agent.agentId === "market") {
+      const match = analysis.match(/(?:market|TAM|opportunity|competitive)\s+[^.]+/i);
+      if (match) marketInsights.push(match[0].toLowerCase());
+    }
+  });
+
+  // Count overall sentiment
   let positiveCount = 0;
   let negativeCount = 0;
 
-  analyses.forEach(analysis => {
+  agents.forEach(agent => {
     positiveKeywords.forEach(keyword => {
-      positiveCount += (analysis.match(new RegExp(`\\b${keyword}\\b`, 'gi')) || []).length;
+      if (agent.analysis.toLowerCase().includes(keyword)) positiveCount++;
     });
     negativeKeywords.forEach(keyword => {
-      negativeCount += (analysis.match(new RegExp(`\\b${keyword}\\b`, 'gi')) || []).length;
+      if (agent.analysis.toLowerCase().includes(keyword)) negativeCount++;
     });
   });
 
-  // Determine overall sentiment
   const sentimentRatio = positiveCount / Math.max(1, positiveCount + negativeCount);
-  let overallSentiment: string;
+
+  // Build a cohesive paragraph
+  let summary = `${startupName} `;
+
+  // Opening assessment based on sentiment
   if (sentimentRatio > 0.65) {
-    overallSentiment = "BULLISH";
+    summary += "presents a compelling investment opportunity with strong fundamentals and significant growth potential. ";
   } else if (sentimentRatio < 0.35) {
-    overallSentiment = "BEARISH";
+    summary += "faces substantial challenges that raise questions about its viability and growth trajectory. ";
   } else {
-    overallSentiment = "MIXED";
+    summary += "shows both promise and notable risks that require careful consideration. ";
   }
 
-  // Extract key insights from each agent
-  const insights: { [key: string]: string[] } = {};
-
-  agents.forEach(agent => {
-    const sentences = agent.analysis.split(/[.!?]+/).filter(s => s.trim().length > 30);
-    const keyPoints: string[] = [];
-
-    // Get first 2-3 substantive sentences
-    for (const sentence of sentences) {
-      const trimmed = sentence.trim();
-      if (trimmed.length > 30 && trimmed.length < 200) {
-        // Look for sentences with strong opinion indicators
-        if (/\b(critical|important|key|significant|major|primary|concern|opportunity|strength|weakness|advantage|risk)\b/i.test(trimmed)) {
-          keyPoints.push(trimmed.charAt(0).toUpperCase() + trimmed.slice(1));
-          if (keyPoints.length >= 2) break;
-        }
-      }
-    }
-
-    // Fallback to first substantive sentence if no key indicators found
-    if (keyPoints.length === 0 && sentences.length > 0) {
-      const firstGood = sentences.find(s => s.trim().length > 30 && s.trim().length < 200);
-      if (firstGood) {
-        keyPoints.push(firstGood.trim().charAt(0).toUpperCase() + firstGood.trim().slice(1));
-      }
-    }
-
-    if (keyPoints.length > 0) {
-      insights[agent.agentName] = keyPoints;
-    }
-  });
-
-  // Check for consensus between skeptic and believer
-  const skeptic = agents.find(a => a.agentId === "skeptic");
-  const believer = agents.find(a => a.agentId === "believer");
-
-  let consensusLevel = "MODERATE";
-  if (skeptic && believer) {
-    const skepticHasPositive = positiveKeywords.some(kw =>
-      skeptic.analysis.toLowerCase().includes(kw)
-    );
-    const believerHasNegative = negativeKeywords.some(kw =>
-      believer.analysis.toLowerCase().includes(kw)
-    );
-
-    if (skepticHasPositive && believerHasNegative) {
-      consensusLevel = "HIGH";
-    } else if (!skepticHasPositive && !believerHasNegative) {
-      consensusLevel = "LOW";
+  // Add market context if available
+  const marketAgent = agents.find(a => a.agentId === "market");
+  if (marketAgent) {
+    const tamMatch = marketAgent.analysis.match(/TAM[^.]*billion/i) || marketAgent.analysis.match(/market[^.]*billion/i);
+    if (tamMatch) {
+      summary += `The company operates in a ${tamMatch[0].toLowerCase()}, `;
     }
   }
 
-  // Build the summary text
-  let summary = "";
-
-  // Overview line
-  summary += `COMPANY: ${startupName}\n`;
-  summary += `SENTIMENT: ${overallSentiment}\n`;
-  summary += `CONSENSUS: ${consensusLevel}\n`;
-  summary += `AGENTS: ${agents.length} completed\n\n`;
-
-  summary += `${"-".repeat(60)}\n\n`;
-
-  // Key findings
-  summary += "KEY FINDINGS:\n\n";
-
-  // Strengths
-  const strengthAgents = ["The Believer", "The Engineer", "People Expert"];
-  const strengths = agents
-    .filter(a => strengthAgents.includes(a.agentName))
-    .flatMap(a => {
-      const analysis = a.analysis.toLowerCase();
-      if (analysis.includes("strong") || analysis.includes("excellent") || analysis.includes("impressive") || analysis.includes("advantage")) {
-        const match = a.analysis.match(/(?:strong|excellent|impressive|leading|solid)\s+[^.]{10,80}/i);
-        return match ? [match[0].trim()] : [];
-      }
-      return [];
-    })
-    .slice(0, 3);
-
-  if (strengths.length > 0) {
-    summary += "Strengths:\n";
-    strengths.forEach(s => {
-      summary += `• ${s.charAt(0).toUpperCase() + s.slice(1)}\n`;
-    });
-    summary += "\n";
+  // Add key strength
+  const believerAgent = agents.find(a => a.agentId === "believer");
+  if (believerAgent) {
+    const strengthMatch = believerAgent.analysis.match(/(?:The company|They|It)\s+(?:has|have|demonstrates?|shows?|possesses?)[^.]+/i);
+    if (strengthMatch && strengthMatch[0].length < 150) {
+      summary += strengthMatch[0] + ". ";
+    }
   }
 
-  // Risks
-  const riskAgents = ["The Skeptic", "Market Analyst"];
-  const risks = agents
-    .filter(a => riskAgents.includes(a.agentName))
-    .flatMap(a => {
-      const analysis = a.analysis.toLowerCase();
-      if (analysis.includes("risk") || analysis.includes("concern") || analysis.includes("challenge") || analysis.includes("threat")) {
-        const match = a.analysis.match(/(?:risk|concern|challenge|threat|weakness)\s+[^.]{10,80}/i);
-        return match ? [match[0].trim()] : [];
-      }
-      return [];
-    })
-    .slice(0, 3);
-
-  if (risks.length > 0) {
-    summary += "Risks:\n";
-    risks.forEach(r => {
-      summary += `• ${r.charAt(0).toUpperCase() + r.slice(1)}\n`;
-    });
-    summary += "\n";
+  // Add primary concern
+  const skepticAgent = agents.find(a => a.agentId === "skeptic");
+  if (skepticAgent) {
+    const concernMatch = skepticAgent.analysis.match(/(?:However|The main|Primary|Key)\s+(?:concern|risk|challenge)[^.]+/i);
+    if (concernMatch && concernMatch[0].length < 150) {
+      summary += concernMatch[0] + ". ";
+    }
   }
 
-  summary += `${"-".repeat(60)}\n\n`;
+  // Closing assessment
+  const techAgent = agents.find(a => a.agentId === "engineer");
+  const peopleAgent = agents.find(a => a.agentId === "people");
 
-  // Agent perspectives
-  summary += "AGENT PERSPECTIVES:\n\n";
+  if (techAgent && techAgent.analysis.toLowerCase().includes("solid")) {
+    summary += "The technical foundation appears robust, ";
+  }
 
-  Object.entries(insights).forEach(([agentName, points]) => {
-    summary += `[${agentName.toUpperCase()}]\n`;
-    points.forEach(point => {
-      summary += `${point}.\n`;
-    });
-    summary += "\n";
-  });
+  if (peopleAgent && peopleAgent.analysis.toLowerCase().includes("experienced")) {
+    summary += "and the founding team brings relevant experience. ";
+  } else if (sentimentRatio > 0.5) {
+    summary += "Overall, the opportunity merits serious consideration despite identified risks. ";
+  } else {
+    summary += "Significant due diligence is recommended before proceeding with investment. ";
+  }
 
-  summary += `${"-".repeat(60)}\n`;
-  summary += `Generated: ${new Date().toLocaleString()}`;
-
-  return summary;
+  return summary.trim();
 }
