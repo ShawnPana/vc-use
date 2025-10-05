@@ -58,8 +58,15 @@ const AGENTS = [
 export const seedDefaultAgents = action({
   args: {},
   handler: async (ctx): Promise<{ seeded: boolean; count: number }> => {
+    // Get auth user ID in the action
+    const userId = await ctx.auth.getUserIdentity();
+    if (!userId) {
+      throw new Error("User must be authenticated");
+    }
+
     // Use internal mutation to avoid circular dependency
     const result = await ctx.runMutation(api.mutations.seedAgentsIfEmpty, {
+      userId: userId.subject,
       agents: AGENTS.map((agent, index) => ({
         agentId: agent.id,
         name: agent.name,
@@ -243,55 +250,30 @@ export const analyzeStartup = action({
     const scrapedDataString = JSON.stringify(scrapedData);
 
     // Get active agents from database
-    const dbAgents = await ctx.runQuery(api.queries.getActiveAgents);
+    let dbAgents = await ctx.runQuery(api.queries.getActiveAgents);
 
     // If no agents in DB, seed with default agents
     if (dbAgents.length === 0) {
-      for (const [index, agent] of AGENTS.entries()) {
-        await ctx.runMutation(api.mutations.upsertAgent, {
-          agentId: agent.id,
-          name: agent.name,
-          prompt: agent.prompt,
-          icon: agent.icon,
-          accent: agent.accent,
-          isActive: true,
-          order: index,
-        });
-      }
+      await ctx.runAction(api.actions.seedDefaultAgents);
       // Re-fetch agents
-      const activeAgents = await ctx.runQuery(api.queries.getActiveAgents);
+      dbAgents = await ctx.runQuery(api.queries.getActiveAgents);
+    }
 
-      // Run agents sequentially
-      for (const [index, agent] of activeAgents.entries()) {
-        try {
-          await ctx.runAction(api.actions.analyzeWithCerebras, {
-            startupName: args.startupName,
-            agentId: agent.agentId,
-            agentName: agent.name,
-            agentPrompt: agent.prompt,
-            scrapedData: scrapedDataString,
-          });
-        } finally {
-          if (index < activeAgents.length - 1) {
-            await sleep(RATE_LIMIT_DELAY_MS);
-          }
-        }
-      }
-    } else {
-      // Run agents sequentially to avoid hitting Cerebras rate limits
-      for (const [index, agent] of dbAgents.entries()) {
-        try {
-          await ctx.runAction(api.actions.analyzeWithCerebras, {
-            startupName: args.startupName,
-            agentId: agent.agentId,
-            agentName: agent.name,
-            agentPrompt: agent.prompt,
-            scrapedData: scrapedDataString,
-          });
-        } finally {
-          if (index < dbAgents.length - 1) {
-            await sleep(RATE_LIMIT_DELAY_MS);
-          }
+    const activeAgents = dbAgents;
+
+    // Run agents sequentially to avoid hitting Cerebras rate limits
+    for (const [index, agent] of activeAgents.entries()) {
+      try {
+        await ctx.runAction(api.actions.analyzeWithCerebras, {
+          startupName: args.startupName,
+          agentId: agent.agentId,
+          agentName: agent.name,
+          agentPrompt: agent.prompt,
+          scrapedData: scrapedDataString,
+        });
+      } finally {
+        if (index < activeAgents.length - 1) {
+          await sleep(RATE_LIMIT_DELAY_MS);
         }
       }
     }
