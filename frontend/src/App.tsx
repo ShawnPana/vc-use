@@ -1,4 +1,3 @@
-import clsx from "clsx";
 import { useState, useEffect } from "react";
 import { useAction, useQuery, useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
@@ -17,6 +16,7 @@ import {
   ArrowLeft,
   Bookmark,
   BookmarkCheck,
+  Expand,
 } from "lucide-react";
 import AgentCard from "./components/AgentCard";
 import { BackgroundCircles } from "@/components/BackgroundCircles";
@@ -24,9 +24,10 @@ import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { FundingChart } from "@/components/FundingChart";
 import { MarketDonutChart } from "@/components/MarketDonutChart";
-import { AgentStatusTimeline } from "@/components/AgentStatusTimeline";
 import { AddAgentModal } from "@/components/AddAgentModal";
 import { PortfolioPage } from "@/components/PortfolioPage";
+import { AgentSummary } from "@/components/AgentSummary";
+import { ExpandedModal } from "@/components/ExpandedModal";
 import "./App.css";
 
 const AGENTS = [
@@ -99,6 +100,7 @@ export default function App() {
   const [showAddAgentModal, setShowAddAgentModal] = useState(false);
   const [showPortfolio, setShowPortfolio] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
+  const [expandedTile, setExpandedTile] = useState<string | null>(null);
 
   // Expose debug setter to window for devtools access
   useEffect(() => {
@@ -216,8 +218,6 @@ export default function App() {
   });
 
   const completedAgents = agentMeta.filter((agent) => agent.status === "completed").length;
-  const loadingAgents = agentMeta.filter((agent) => agent.status === "loading").length;
-  const errorAgents = agentMeta.filter((agent) => agent.status === "error").length;
 
   // Show portfolio page
   if (showPortfolio) {
@@ -437,7 +437,6 @@ export default function App() {
                           e.currentTarget.style.background = "#ef4444";
                           e.currentTarget.style.borderColor = "#ef4444";
                           e.currentTarget.style.color = "white";
-                          const icon = e.currentTarget.querySelector("svg");
                           const text = e.currentTarget.querySelector("span");
                           if (text) text.textContent = "Remove from Portfolio";
                         }}
@@ -470,6 +469,32 @@ export default function App() {
                   <Lightbulb />
                 </span>
                 <h3 className="dashboard__tile-title">Founder Story</h3>
+                <button
+                  onClick={() => setExpandedTile("founder")}
+                  style={{
+                    marginLeft: "auto",
+                    background: "transparent",
+                    border: "1px solid var(--color-border)",
+                    borderRadius: "0.5rem",
+                    padding: "0.4rem",
+                    cursor: "pointer",
+                    color: "var(--color-muted-foreground)",
+                    display: "flex",
+                    alignItems: "center",
+                    transition: "all 0.2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "var(--color-muted)";
+                    e.currentTarget.style.color = "var(--color-foreground)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "transparent";
+                    e.currentTarget.style.color = "var(--color-muted-foreground)";
+                  }}
+                  title="Expand"
+                >
+                  <Expand size={16} />
+                </button>
               </div>
               <div className="dashboard__tile-body dashboard__tile-body--scroll">
                 {isSummariesLoading ? (
@@ -488,6 +513,32 @@ export default function App() {
                   <Target />
                 </span>
                 <h3 className="dashboard__tile-title">Market Opportunity</h3>
+                <button
+                  onClick={() => setExpandedTile("market")}
+                  style={{
+                    marginLeft: "auto",
+                    background: "transparent",
+                    border: "1px solid var(--color-border)",
+                    borderRadius: "0.5rem",
+                    padding: "0.4rem",
+                    cursor: "pointer",
+                    color: "var(--color-muted-foreground)",
+                    display: "flex",
+                    alignItems: "center",
+                    transition: "all 0.2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "var(--color-muted)";
+                    e.currentTarget.style.color = "var(--color-foreground)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "transparent";
+                    e.currentTarget.style.color = "var(--color-muted-foreground)";
+                  }}
+                  title="Expand"
+                >
+                  <Expand size={16} />
+                </button>
               </div>
               <div className="dashboard__tile-body" style={{ paddingTop: '0.5rem' }}>
                 <MarketDonutChart data={SAMPLE_MARKET_DATA} />
@@ -500,6 +551,32 @@ export default function App() {
                   <DollarSign />
                 </span>
                 <h3 className="dashboard__tile-title">Capital Outlook</h3>
+                <button
+                  onClick={() => setExpandedTile("funding")}
+                  style={{
+                    marginLeft: "auto",
+                    background: "transparent",
+                    border: "1px solid var(--color-border)",
+                    borderRadius: "0.5rem",
+                    padding: "0.4rem",
+                    cursor: "pointer",
+                    color: "var(--color-muted-foreground)",
+                    display: "flex",
+                    alignItems: "center",
+                    transition: "all 0.2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "var(--color-muted)";
+                    e.currentTarget.style.color = "var(--color-foreground)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "transparent";
+                    e.currentTarget.style.color = "var(--color-muted-foreground)";
+                  }}
+                  title="Expand"
+                >
+                  <Expand size={16} />
+                </button>
               </div>
               <div className="dashboard__tile-body dashboard__tile-body--scroll">
                 {isSummariesLoading ? (
@@ -518,6 +595,32 @@ export default function App() {
                   <TrendingUp />
                 </span>
                 <h3 className="dashboard__tile-title">Funding Progress</h3>
+                <button
+                  onClick={() => setExpandedTile("metrics")}
+                  style={{
+                    marginLeft: "auto",
+                    background: "transparent",
+                    border: "1px solid var(--color-border)",
+                    borderRadius: "0.5rem",
+                    padding: "0.4rem",
+                    cursor: "pointer",
+                    color: "var(--color-muted-foreground)",
+                    display: "flex",
+                    alignItems: "center",
+                    transition: "all 0.2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "var(--color-muted)";
+                    e.currentTarget.style.color = "var(--color-foreground)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "transparent";
+                    e.currentTarget.style.color = "var(--color-muted-foreground)";
+                  }}
+                  title="Expand"
+                >
+                  <Expand size={16} />
+                </button>
               </div>
               <div className="dashboard__tile-body" style={{ paddingTop: '1rem' }}>
                 <FundingChart data={SAMPLE_FUNDING_DATA} />
@@ -574,8 +677,24 @@ export default function App() {
                 </div>
               ) : (
                 <>
+                  {/* Show summary when all agents are completed */}
+                  {completedAgents === agentMeta.length && agentMeta.length > 0 && (
+                    <AgentSummary
+                      agents={agentMeta.map(agent => ({
+                        agentId: agent.id,
+                        agentName: agent.name,
+                        analysis: agent.analysis,
+                        status: agent.status,
+                        accent: agent.accent,
+                      }))}
+                      startupName={searchedStartup}
+                    />
+                  )}
+
                   <p className="dashboard__agent-scroll-note">
-                    Scroll to review detailed memos from each perspective.
+                    {completedAgents === agentMeta.length && agentMeta.length > 0
+                      ? "Analysis complete. Review the executive summary above and detailed memos below."
+                      : "Scroll to review detailed memos from each perspective."}
                   </p>
                   <div className="dashboard__agents">
                     {agentMeta.map((agent, index) => (
@@ -603,6 +722,157 @@ export default function App() {
       {showAddAgentModal && (
         <AddAgentModal onClose={() => setShowAddAgentModal(false)} />
       )}
+
+      {/* Expanded Modal for Founder Story */}
+      <ExpandedModal
+        isOpen={expandedTile === "founder"}
+        onClose={() => setExpandedTile(null)}
+        title="Founder Story"
+        icon={<Lightbulb />}
+      >
+        <div style={{ fontSize: "1rem", lineHeight: 1.8 }}>
+          {isSummariesLoading ? (
+            <p>Loading founder information...</p>
+          ) : getSummaryContent("founder_story") ? (
+            <>
+              <p style={{ marginBottom: "1.5rem" }}>{getSummaryContent("founder_story")}</p>
+              {scrapedData && JSON.parse(scrapedData.data).founders && (
+                <div>
+                  <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Founder Profiles</h3>
+                  {JSON.parse(scrapedData.data).founders.map((founder: any, idx: number) => (
+                    <div key={idx} style={{ marginBottom: "1.5rem", paddingBottom: "1.5rem", borderBottom: idx < JSON.parse(scrapedData.data).founders.length - 1 ? "1px solid var(--color-border)" : "none" }}>
+                      <h4 style={{ fontWeight: 600, marginBottom: "0.5rem" }}>{founder.name}</h4>
+                      {founder.bio && <p style={{ marginBottom: "0.5rem" }}>{founder.bio}</p>}
+                      {(founder.linkedin || founder.twitter) && (
+                        <div style={{ display: "flex", gap: "1rem", marginTop: "0.5rem" }}>
+                          {founder.linkedin && <a href={founder.linkedin} target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-primary)" }}>LinkedIn</a>}
+                          {founder.twitter && <a href={founder.twitter} target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-primary)" }}>Twitter</a>}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <p>No founder information available yet.</p>
+          )}
+        </div>
+      </ExpandedModal>
+
+      {/* Expanded Modal for Market Opportunity */}
+      <ExpandedModal
+        isOpen={expandedTile === "market"}
+        onClose={() => setExpandedTile(null)}
+        title="Market Opportunity"
+        icon={<Target />}
+      >
+        <div>
+          <MarketDonutChart data={SAMPLE_MARKET_DATA} />
+          <div style={{ marginTop: "2rem" }}>
+            <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Market Analysis</h3>
+            <div style={{ display: "grid", gap: "1rem" }}>
+              {SAMPLE_MARKET_DATA.map((item) => (
+                <div key={item.name} style={{
+                  padding: "1rem",
+                  background: "var(--color-background)",
+                  borderRadius: "0.5rem",
+                  border: "1px solid var(--color-border)"
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                    <span style={{ fontWeight: 600 }}>{item.name}</span>
+                    <span style={{ fontSize: "1.2rem", fontWeight: 700 }}>
+                      ${(item.value / 1000000000).toFixed(1)}B
+                    </span>
+                  </div>
+                  <p style={{ fontSize: "0.9rem", color: "var(--color-muted-foreground)" }}>{item.label}</p>
+                </div>
+              ))}
+            </div>
+            <p style={{ marginTop: "1.5rem", fontSize: "0.95rem", lineHeight: 1.6 }}>
+              {getSummaryContent("market_position") || "Market position analysis will appear here once the analysis is complete."}
+            </p>
+          </div>
+        </div>
+      </ExpandedModal>
+
+      {/* Expanded Modal for Capital Outlook */}
+      <ExpandedModal
+        isOpen={expandedTile === "funding"}
+        onClose={() => setExpandedTile(null)}
+        title="Capital Outlook"
+        icon={<DollarSign />}
+      >
+        <div style={{ fontSize: "1rem", lineHeight: 1.8 }}>
+          {isSummariesLoading ? (
+            <p>Loading funding information...</p>
+          ) : (
+            <>
+              <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Funding Assessment</h3>
+              <p style={{ marginBottom: "1.5rem" }}>
+                {getSummaryContent("funding_outlook") || "Funding outlook will appear here once the analysis is complete."}
+              </p>
+
+              <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Key Considerations</h3>
+              <ul style={{ paddingLeft: "1.5rem", lineHeight: 1.8 }}>
+                <li>Current funding stage and runway</li>
+                <li>Burn rate and capital efficiency</li>
+                <li>Investor interest and market conditions</li>
+                <li>Competitive funding landscape</li>
+                <li>Next round timing and valuation expectations</li>
+              </ul>
+
+              {scrapedData && (
+                <div style={{ marginTop: "2rem" }}>
+                  <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Company Overview</h3>
+                  <p>{JSON.parse(scrapedData.data).summary}</p>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </ExpandedModal>
+
+      {/* Expanded Modal for Funding Progress */}
+      <ExpandedModal
+        isOpen={expandedTile === "metrics"}
+        onClose={() => setExpandedTile(null)}
+        title="Funding Progress"
+        icon={<TrendingUp />}
+      >
+        <div>
+          <FundingChart data={SAMPLE_FUNDING_DATA} />
+          <div style={{ marginTop: "2rem" }}>
+            <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Funding History</h3>
+            <div style={{ display: "grid", gap: "1rem" }}>
+              {SAMPLE_FUNDING_DATA.map((round, idx) => (
+                <div key={idx} style={{
+                  padding: "1rem",
+                  background: "var(--color-background)",
+                  borderRadius: "0.5rem",
+                  border: "1px solid var(--color-border)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center"
+                }}>
+                  <span>{round.date}</span>
+                  <span style={{ fontWeight: 600, fontSize: "1.1rem" }}>
+                    ${(round.amount / 1000000).toFixed(1)}M
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginTop: "2rem" }}>
+              <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Growth Trajectory</h3>
+              <p style={{ fontSize: "0.95rem", lineHeight: 1.6 }}>
+                The company has raised a total of ${SAMPLE_FUNDING_DATA.reduce((sum, r) => sum + r.amount, 0) / 1000000}M
+                across {SAMPLE_FUNDING_DATA.length} funding rounds, showing consistent investor confidence and growth momentum.
+              </p>
+            </div>
+          </div>
+        </div>
+      </ExpandedModal>
     </div>
   );
 }
