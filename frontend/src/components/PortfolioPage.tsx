@@ -131,19 +131,22 @@ export function PortfolioPage({ onSelectCompany, onBack }: PortfolioPageProps) {
                   )}
                 </div>
               </div>
-              {company.bio && (
-                <p style={{
-                  fontSize: "0.95rem",
-                  color: "var(--color-muted-foreground)",
-                  lineHeight: "1.6",
-                  display: "-webkit-box",
-                  WebkitLineClamp: 3,
-                  WebkitBoxOrient: "vertical",
-                  overflow: "hidden",
-                  marginBottom: "1rem",
-                }}>
-                  {company.bio}
-                </p>
+              {(company.summary || company.bio) && (
+                <div
+                  style={{
+                    fontSize: "0.95rem",
+                    color: "var(--color-muted-foreground)",
+                    lineHeight: "1.6",
+                    marginBottom: "1rem",
+                    maxHeight: "160px",
+                    overflowY: "auto",
+                    paddingRight: "0.5rem",
+                    marginRight: "-0.5rem",
+                    whiteSpace: "pre-line",
+                  }}
+                >
+                  {company.summary || company.bio}
+                </div>
               )}
               <div style={{
                 display: "flex",
