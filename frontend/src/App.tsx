@@ -5,13 +5,11 @@ import { Authenticated, Unauthenticated } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { AuthPage } from "@/components/AuthPage";
 import {
-  TrendingDown,
   TrendingUp,
   Code,
   Globe,
   Target,
   Users,
-  Brain,
   Lightbulb,
   Search,
   Plus,
@@ -45,40 +43,40 @@ const stripLeadingMarkers = (text: string) => text.replace(/^[\s*•\u2022-]+/, 
 
 const AGENTS = [
   {
-    id: "skeptic",
-    name: "The Skeptic",
-    icon: TrendingDown,
-    accent: "#f87171",
+    id: "diligence",
+    name: "Due Diligence",
+    icon: Search,
+    accent: "#ef4444",
   },
   {
-    id: "believer",
-    name: "The Believer",
+    id: "financials",
+    name: "Financial Analysis",
     icon: TrendingUp,
-    accent: "#34d399",
-  },
-  {
-    id: "engineer",
-    name: "The Engineer",
-    icon: Code,
-    accent: "#38bdf8",
+    accent: "#f59e0b",
   },
   {
     id: "market",
-    name: "Market Analyst",
+    name: "Market Sizing",
+    icon: Target,
+    accent: "#8b5cf6",
+  },
+  {
+    id: "competitive",
+    name: "Competitive Analysis",
     icon: Globe,
-    accent: "#c084fc",
+    accent: "#06b6d4",
   },
   {
-    id: "people",
-    name: "People Expert",
+    id: "team",
+    name: "Team Assessment",
     icon: Users,
-    accent: "#facc15",
+    accent: "#10b981",
   },
   {
-    id: "ai",
-    name: "AI Strategist",
-    icon: Brain,
-    accent: "#818cf8",
+    id: "technology",
+    name: "Technology Audit",
+    icon: Code,
+    accent: "#3b82f6",
   },
 ];
 
@@ -276,7 +274,7 @@ function MainApp() {
     return {
       id: agent.agentId,
       name: agent.name,
-      icon: frontendAgent?.icon || Brain,
+      icon: frontendAgent?.icon || Search,
       accent: agent.accent || "#818cf8",
       status,
       analysis,
@@ -743,57 +741,119 @@ function MainApp() {
                 {recentNewsItems.length === 0 && !hypeSummarySnippet ? (
                   <p className="dashboard__placeholder">No market signals captured yet.</p>
                 ) : (
-                  <div style={{ display: "grid", gap: "1rem" }}>
+                  <div style={{ display: "grid", gap: "1.25rem" }}>
+                    {/* Overview Section */}
                     {hypeSummarySnippet && (
-                      <div
-                        style={{
-                          border: "1px solid var(--color-border)",
-                          borderRadius: "0.75rem",
-                          padding: "0.85rem 1rem",
-                          background: "var(--color-card)",
-                          fontSize: "0.9rem",
-                          lineHeight: 1.6,
+                      <div>
+                        <h4 style={{
+                          fontSize: "0.75rem",
+                          fontWeight: 600,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
                           color: "var(--color-muted-foreground)",
-                        }}
-                      >
-                        {hypeSummarySnippet}
+                          marginBottom: "0.5rem"
+                        }}>
+                          Overview
+                        </h4>
+                        <div
+                          style={{
+                            borderLeft: "3px solid var(--color-primary)",
+                            paddingLeft: "0.75rem",
+                            fontSize: "0.9rem",
+                            lineHeight: 1.6,
+                            color: "var(--color-foreground)",
+                          }}
+                        >
+                          {hypeSummarySnippet}
+                        </div>
                       </div>
                     )}
 
-                    {recentNewsItems.slice(0, 3).map((item: string, index: number) => (
-                      <div
-                        key={`news-${index}`}
-                        style={{
-                          display: "flex",
-                          alignItems: "flex-start",
-                          gap: "0.75rem",
-                          fontSize: "0.85rem",
-                          color: "var(--color-foreground)",
-                        }}
-                      >
-                        <span
-                          style={{
-                            minWidth: "0.75rem",
-                            height: "0.75rem",
-                            borderRadius: "999px",
-                            background: "var(--color-primary)",
-                            marginTop: "0.4rem",
-                          }}
-                        />
-                        <span>{item}</span>
-                      </div>
-                    ))}
-
-                    {!isSummariesLoading && getSummaryContent("funding_outlook") && (
-                      <div
-                        style={{
-                          fontSize: "0.8rem",
+                    {/* Recent Headlines Section */}
+                    {recentNewsItems.length > 0 && (
+                      <div>
+                        <h4 style={{
+                          fontSize: "0.75rem",
+                          fontWeight: 600,
                           textTransform: "uppercase",
-                          letterSpacing: "0.08em",
+                          letterSpacing: "0.05em",
                           color: "var(--color-muted-foreground)",
-                        }}
-                      >
-                        {getSummaryContent("funding_outlook")}
+                          marginBottom: "0.65rem"
+                        }}>
+                          Recent Headlines
+                        </h4>
+                        <div style={{ display: "grid", gap: "0.75rem" }}>
+                          {recentNewsItems.slice(0, 3).map((item: string, index: number) => (
+                            <div
+                              key={`news-${index}`}
+                              style={{
+                                display: "flex",
+                                alignItems: "flex-start",
+                                gap: "0.75rem",
+                                fontSize: "0.875rem",
+                                lineHeight: 1.5,
+                                color: "var(--color-foreground)",
+                                padding: "0.5rem",
+                                borderRadius: "0.5rem",
+                                background: "var(--color-muted)",
+                                transition: "background 0.2s",
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = "var(--color-accent)";
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = "var(--color-muted)";
+                              }}
+                            >
+                              <span
+                                style={{
+                                  minWidth: "1.5rem",
+                                  height: "1.5rem",
+                                  borderRadius: "0.25rem",
+                                  background: "var(--color-primary)",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontSize: "0.7rem",
+                                  fontWeight: 600,
+                                  color: "white",
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {index + 1}
+                              </span>
+                              <span style={{ flex: 1 }}>{item}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Funding Outlook Section */}
+                    {!isSummariesLoading && getSummaryContent("funding_outlook") && (
+                      <div>
+                        <h4 style={{
+                          fontSize: "0.75rem",
+                          fontWeight: 600,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                          color: "var(--color-muted-foreground)",
+                          marginBottom: "0.5rem"
+                        }}>
+                          Funding Outlook
+                        </h4>
+                        <div
+                          style={{
+                            fontSize: "0.875rem",
+                            lineHeight: 1.6,
+                            color: "var(--color-foreground)",
+                            padding: "0.75rem",
+                            borderRadius: "0.5rem",
+                            background: "var(--color-accent)",
+                          }}
+                        >
+                          {getSummaryContent("funding_outlook")}
+                        </div>
                       </div>
                     )}
                   </div>
