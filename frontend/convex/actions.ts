@@ -106,24 +106,27 @@ export const scrapeStartupData = action({
 
       const result = await response.json();
 
-      if (!result.success) {
-        throw new Error(result.error || "Backend analysis failed");
-      }
-
       // Extract and format the data from backend
       const companyData = result.company;
-
-      if (!companyData) {
-        throw new Error("Backend analysis returned no company data");
-      }
       const hypeData = result.hype;
+
+      // Check if we have at least some data (hype or company)
+      if (!result.success && !companyData && !hypeData) {
+        throw new Error(result.error || "Backend analysis failed - no data returned");
+      }
+
+      // If company data is missing or incomplete, use defaults
+      const website = companyData?.company_website || "";
+      const bio = companyData?.company_bio && companyData.company_bio !== "None" ? companyData.company_bio : "";
+      const summary = companyData?.company_summary && companyData.company_summary !== "None" ? companyData.company_summary : "";
+      const founders = (companyData?.founders_info?.founders || []);
 
       const scrapedData = {
         startupName: args.startupName,
-        website: companyData.company_website,
-        bio: companyData.company_bio,
-        summary: companyData.company_summary,
-        founders: (companyData.founders_info?.founders || []).map((f: any) => ({
+        website,
+        bio,
+        summary,
+        founders: founders.map((f: any) => ({
           name: f.name,
           linkedin: f.social_media?.linkedin,
           twitter: f.social_media?.X,
@@ -148,6 +151,65 @@ export const scrapeStartupData = action({
       return scrapedData;
     } catch (error) {
       console.error("Error scraping startup data:", error);
+      throw error;
+    }
+  },
+});
+
+// Research founders using backend API
+export const researchFounders = action({
+  args: { startupName: v.string(), founders: v.array(v.object({ name: v.string() })) },
+  handler: async (ctx, args) => {
+    const backendUrl = process.env.BACKEND_API_URL || "http://localhost:8000";
+    const apiKey = process.env.BACKEND_API_KEY;
+
+    if (!apiKey) {
+      throw new Error("BACKEND_API_KEY not configured");
+    }
+
+    try {
+      const response = await fetch(`${backendUrl}/api/research-founders`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": apiKey,
+        },
+        body: JSON.stringify({
+          company_name: args.startupName,
+          founders: {
+            founders: args.founders.map((f) => ({ name: f.name })),
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Backend API error: ${response.status} ${errorText}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || "Founder research failed");
+      }
+
+      // Store enriched founder data
+      const enrichedFounders = (result.data?.founders || []).map((f: any) => ({
+        name: f.name,
+        linkedin: f.social_media?.linkedin,
+        twitter: f.social_media?.X,
+        personalWebsite: f.personal_website,
+        bio: f.bio,
+      }));
+
+      await ctx.runMutation(api.mutations.storeEnrichedFounders, {
+        startupName: args.startupName,
+        founders: JSON.stringify(enrichedFounders),
+      });
+
+      return enrichedFounders;
+    } catch (error) {
+      console.error("Error researching founders:", error);
       throw error;
     }
   },

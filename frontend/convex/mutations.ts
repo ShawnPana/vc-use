@@ -284,3 +284,30 @@ export const removeFromPortfolio = mutation({
     await ctx.db.delete(company._id);
   },
 });
+
+export const storeEnrichedFounders = mutation({
+  args: {
+    startupName: v.string(),
+    founders: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("enrichedFounders")
+      .withIndex("by_startup", (q) => q.eq("startupName", args.startupName))
+      .first();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        founders: args.founders,
+        timestamp: Date.now(),
+      });
+      return existing._id;
+    }
+
+    return await ctx.db.insert("enrichedFounders", {
+      startupName: args.startupName,
+      founders: args.founders,
+      timestamp: Date.now(),
+    });
+  },
+});

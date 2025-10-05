@@ -76,3 +76,14 @@ export const isInPortfolio = query({
     return !!company;
   },
 });
+
+export const getEnrichedFounders = query({
+  args: { startupName: v.string() },
+  handler: async (ctx, args) => {
+    const data = await ctx.db
+      .query("enrichedFounders")
+      .withIndex("by_startup", (q) => q.eq("startupName", args.startupName))
+      .first();
+    return data;
+  },
+});

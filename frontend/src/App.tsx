@@ -101,6 +101,7 @@ export default function App() {
   }, []);
 
   const analyzeStartup = useAction(api.actions.analyzeStartup);
+  const researchFoundersAction = useAction(api.actions.researchFounders);
   const seedDefaultAgents = useAction(api.actions.seedDefaultAgents);
   const addToPortfolioMutation = useMutation(api.mutations.addToPortfolio);
   const removeFromPortfolioMutation = useMutation(api.mutations.removeFromPortfolio);
@@ -146,6 +147,10 @@ export default function App() {
   );
   const isInPortfolio = useQuery(
     api.queries.isInPortfolio,
+    searchedStartup ? { startupName: searchedStartup } : "skip"
+  );
+  const enrichedFounders = useQuery(
+    api.queries.getEnrichedFounders,
     searchedStartup ? { startupName: searchedStartup } : "skip"
   );
   const dbAgents = useQuery(api.queries.getAgents);
@@ -195,11 +200,29 @@ export default function App() {
     document.body.style.overflow = "";
   }, [showPortfolio]);
 
-  
+
   // Seed default agents on mount
   useEffect(() => {
     void seedDefaultAgents();
   }, [seedDefaultAgents]);
+
+  // Trigger founder research when scraped data becomes available
+  useEffect(() => {
+    if (!searchedStartup || !parsedScrapedData) return;
+
+    // Check if we already have enriched founders for this startup
+    if (enrichedFounders) return;
+
+    // Get founder names from scraped data
+    const founders = parsedScrapedData.founders || [];
+    if (founders.length === 0) return;
+
+    // Call research founders action
+    void researchFoundersAction({
+      startupName: searchedStartup,
+      founders: founders.map((f: any) => ({ name: f.name })),
+    });
+  }, [searchedStartup, parsedScrapedData, enrichedFounders, researchFoundersAction]);
 
   const handleAnalyze = async () => {
     if (!startupName.trim()) return;
@@ -527,13 +550,27 @@ export default function App() {
                 </button>
               </div>
               <div className="dashboard__tile-body dashboard__tile-body--scroll">
-                {isSummariesLoading ? (
-                  <p className="dashboard__placeholder">Collecting founder background…</p>
-                ) : getSummaryContent("founder_story") ? (
-                  <p>{getSummaryContent("founder_story")}</p>
-                ) : (
-                  <p className="dashboard__placeholder">No founder insights collected yet.</p>
-                )}
+                {!enrichedFounders ? (
+                  <p className="dashboard__placeholder">Researching founder backgrounds…</p>
+                ) : (() => {
+                  try {
+                    const founders = JSON.parse(enrichedFounders.founders);
+                    return founders.length > 0 ? (
+                      <div>
+                        {founders.map((founder: any, idx: number) => (
+                          <div key={idx} style={{ marginBottom: idx < founders.length - 1 ? "1rem" : 0 }}>
+                            <p style={{ fontWeight: 600, marginBottom: "0.25rem" }}>{founder.name}</p>
+                            {founder.bio && <p style={{ fontSize: "0.9rem" }}>{founder.bio}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="dashboard__placeholder">No founder information available.</p>
+                    );
+                  } catch {
+                    return <p className="dashboard__placeholder">Error loading founder data.</p>;
+                  }
+                })()}
               </div>
             </article>
 
@@ -767,32 +804,35 @@ export default function App() {
         icon={<Lightbulb />}
       >
         <div style={{ fontSize: "1rem", lineHeight: 1.8 }}>
-          {isSummariesLoading ? (
-            <p>Loading founder information...</p>
-          ) : getSummaryContent("founder_story") ? (
-            <>
-              <p style={{ marginBottom: "1.5rem" }}>{getSummaryContent("founder_story")}</p>
-              {parsedScrapedData?.founders && (
+          {!enrichedFounders ? (
+            <p>Researching founder backgrounds...</p>
+          ) : (() => {
+            try {
+              const founders = JSON.parse(enrichedFounders.founders);
+              return founders.length > 0 ? (
                 <div>
                   <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Founder Profiles</h3>
-                  {parsedScrapedData.founders.map((founder: any, idx: number) => (
-                    <div key={idx} style={{ marginBottom: "1.5rem", paddingBottom: "1.5rem", borderBottom: idx < parsedScrapedData.founders.length - 1 ? "1px solid var(--color-border)" : "none" }}>
+                  {founders.map((founder: any, idx: number) => (
+                    <div key={idx} style={{ marginBottom: "1.5rem", paddingBottom: "1.5rem", borderBottom: idx < founders.length - 1 ? "1px solid var(--color-border)" : "none" }}>
                       <h4 style={{ fontWeight: 600, marginBottom: "0.5rem" }}>{founder.name}</h4>
                       {founder.bio && <p style={{ marginBottom: "0.5rem" }}>{founder.bio}</p>}
-                      {(founder.linkedin || founder.twitter) && (
+                      {(founder.linkedin || founder.twitter || founder.personalWebsite) && (
                         <div style={{ display: "flex", gap: "1rem", marginTop: "0.5rem" }}>
                           {founder.linkedin && <a href={founder.linkedin} target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-primary)" }}>LinkedIn</a>}
                           {founder.twitter && <a href={founder.twitter} target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-primary)" }}>Twitter</a>}
+                          {founder.personalWebsite && <a href={founder.personalWebsite} target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-primary)" }}>Website</a>}
                         </div>
                       )}
                     </div>
                   ))}
                 </div>
-              )}
-            </>
-          ) : (
-            <p>No founder information available yet.</p>
-          )}
+              ) : (
+                <p>No founder information available.</p>
+              );
+            } catch {
+              return <p>Error loading founder data.</p>;
+            }
+          })()}
         </div>
       </ExpandedModal>
 

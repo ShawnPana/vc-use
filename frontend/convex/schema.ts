@@ -44,4 +44,10 @@ export default defineSchema({
     summary: v.optional(v.string()),
   }).index("by_startup", ["startupName"])
     .index("by_added_date", ["addedAt"]),
+
+  enrichedFounders: defineTable({
+    startupName: v.string(),
+    founders: v.string(),
+    timestamp: v.number(),
+  }).index("by_startup", ["startupName"]),
 });
