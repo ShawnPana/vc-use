@@ -84,12 +84,34 @@ const SAMPLE_MARKET_DATA = [
   { name: 'SOM', label: 'Serviceable Obtainable Market', value: 3000000000 },
 ];
 
+// Global debug flag - set window.DEBUG = true in devtools
+declare global {
+  interface Window {
+    DEBUG?: boolean;
+    setDebug?: (value: boolean) => void;
+  }
+}
+
 export default function App() {
   const [startupName, setStartupName] = useState("");
   const [searchedStartup, setSearchedStartup] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showAddAgentModal, setShowAddAgentModal] = useState(false);
   const [showPortfolio, setShowPortfolio] = useState(false);
+  const [debugMode, setDebugMode] = useState(false);
+
+  // Expose debug setter to window for devtools access
+  useEffect(() => {
+    window.setDebug = (value: boolean) => {
+      window.DEBUG = value;
+      setDebugMode(value);
+      console.log(`Debug mode ${value ? 'enabled' : 'disabled'}`);
+    };
+    // Sync initial value
+    if (window.DEBUG !== undefined) {
+      setDebugMode(window.DEBUG);
+    }
+  }, []);
 
   const analyzeStartup = useAction(api.actions.analyzeStartup);
   const seedDefaultAgents = useAction(api.actions.seedDefaultAgents);
@@ -154,7 +176,7 @@ export default function App() {
     setIsAnalyzing(true);
 
     try {
-      await analyzeStartup({ startupName });
+      await analyzeStartup({ startupName, debug: debugMode });
     } catch (error) {
       console.error("Analysis error:", error);
     } finally {
@@ -311,7 +333,7 @@ export default function App() {
                     setTimeout(() => {
                       setSearchedStartup(example);
                       setIsAnalyzing(true);
-                      analyzeStartup({ startupName: example })
+                      analyzeStartup({ startupName: example, debug: debugMode })
                         .catch((error) => console.error("Analysis error:", error))
                         .finally(() => setIsAnalyzing(false));
                     }, 100);

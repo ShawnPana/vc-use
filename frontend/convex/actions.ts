@@ -77,7 +77,7 @@ export const seedDefaultAgents = action({
 
 // Call backend Browser Use API to scrape startup data
 export const scrapeStartupData = action({
-  args: { startupName: v.string() },
+  args: { startupName: v.string(), debug: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
     const backendUrl = process.env.BACKEND_API_URL || "http://localhost:8000";
     const apiKey = process.env.BACKEND_API_KEY;
@@ -95,6 +95,7 @@ export const scrapeStartupData = action({
         },
         body: JSON.stringify({
           company_name: args.startupName,
+          debug: args.debug || false,
         }),
       });
 
@@ -217,11 +218,12 @@ export const analyzeWithCerebras = action({
 
 // Orchestrator action to run all analyses
 export const analyzeStartup = action({
-  args: { startupName: v.string() },
+  args: { startupName: v.string(), debug: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
     // First, scrape the data
     const scrapedData = await ctx.runAction(api.actions.scrapeStartupData, {
       startupName: args.startupName,
+      debug: args.debug,
     });
 
     const scrapedDataString = JSON.stringify(scrapedData);
