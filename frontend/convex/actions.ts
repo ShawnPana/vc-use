@@ -201,7 +201,7 @@ export const analyzeWithCerebras = action({
             },
             {
               role: "user",
-              content: `Analyze this startup based on the following detailed data gathered from web research:\n\n${args.scrapedData}\n\nProvide a detailed, insightful analysis in 3-5 paragraphs focusing on your specific perspective.`,
+              content: `Here is the startup data gathered from web research:\n\n${args.scrapedData}`,
             },
           ],
           temperature: 0.7,
@@ -232,6 +232,48 @@ export const analyzeWithCerebras = action({
         analysis: `Error: ${error instanceof Error ? error.message : "Unknown error"}`,
         status: "error",
       });
+      throw error;
+    }
+  },
+});
+
+// Action to analyze a single agent for a startup (when agent is added later)
+export const analyzeSingleAgent = action({
+  args: {
+    startupName: v.string(),
+    agentId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    try {
+      // Get the scraped data
+      const scrapedData = await ctx.runQuery(api.queries.getScrapedData, {
+        startupName: args.startupName,
+      });
+
+      if (!scrapedData?.data) {
+        throw new Error("No scraped data available for this startup. Please run a full analysis first.");
+      }
+
+      // Get the agent details
+      const agents = await ctx.runQuery(api.queries.getAgents);
+      const agent = agents.find(a => a.agentId === args.agentId);
+
+      if (!agent) {
+        throw new Error(`Agent ${args.agentId} not found`);
+      }
+
+      // Run the analysis for this single agent
+      await ctx.runAction(api.actions.analyzeWithCerebras, {
+        startupName: args.startupName,
+        agentId: agent.agentId,
+        agentName: agent.name,
+        agentPrompt: agent.prompt,
+        scrapedData: scrapedData.data,
+      });
+
+      return { success: true };
+    } catch (error) {
+      console.error("Error in analyzeSingleAgent:", error);
       throw error;
     }
   },
