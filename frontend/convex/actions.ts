@@ -218,9 +218,19 @@ export const runDeepResearch = action({
         return { success: true, message: "Deep research already completed" };
       }
 
-      console.log(`[runDeepResearch] Calling /api/deep-research endpoint`);
-      // Call backend deep-research endpoint
-      const response = await fetch(`${backendUrl}/api/deep-research`, {
+      console.log(`[runDeepResearch] Calling /api/deep-research endpoint (async mode)`);
+
+      // Get the Convex deployment URL for the callback
+      const convexSiteUrl = process.env.CONVEX_SITE_URL;
+      if (!convexSiteUrl) {
+        throw new Error("CONVEX_SITE_URL not configured");
+      }
+
+      const callbackUrl = `${convexSiteUrl}/deep-research-callback`;
+
+      // Call backend deep-research endpoint with callback URL
+      // Don't await - let it run asynchronously and call us back when done
+      fetch(`${backendUrl}/api/deep-research`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -230,6 +240,7 @@ export const runDeepResearch = action({
           company_name: args.startupName,
           company_bio: parsedData.companyBio || parsedData.company_bio || null,
           company_website: parsedData.companyWebsite || parsedData.company_website || null,
+          callback_url: callbackUrl,
           founders: {
             founders: founders.map((f: any) => ({
               name: f.name,
@@ -243,93 +254,18 @@ export const runDeepResearch = action({
             })),
           },
         }),
+      }).catch((error) => {
+        console.error(`[runDeepResearch] Failed to trigger async deep research:`, error);
       });
 
-      console.log(`[runDeepResearch] API response status: ${response.status}`);
+      console.log(`[runDeepResearch] Triggered async deep research with callback to ${callbackUrl}`);
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[runDeepResearch] API error: ${response.status} - ${errorText}`);
-        throw new Error(`Backend API error: ${response.status} ${errorText}`);
-      }
-
-      const result = await response.json();
-
-      if (!result.success) {
-        console.error(`[runDeepResearch] Backend returned success=false: ${result.error}`);
-        throw new Error(result.error || "Deep research failed");
-      }
-
-      console.log(`[runDeepResearch] Successfully received enriched data`, JSON.stringify(result));
-
-      // Update the scraped data with enriched founders and competitors
-      // Backend returns flat arrays: result.founders and result.competitors
-      const foundersArray = result.founders?.founders || result.founders || [];
-      const competitorsArray = result.competitors?.competitors || result.competitors || [];
-
-      const enrichedFounders = foundersArray.map((f: any) => ({
-        name: f.name,
-        linkedin: f.social_media?.linkedin,
-        twitter: f.social_media?.X,
-        personalWebsite: f.personal_website,
-        bio: f.bio,
-      }));
-
-      const competitors = competitorsArray.map((c: any) => ({
-        name: c.name,
-        website: c.website,
-        description: c.description,
-      }));
-
-      console.log(`[runDeepResearch] Enriched ${enrichedFounders.length} founders, found ${competitors.length} competitors`);
-      console.log(`[runDeepResearch] Enriched founders:`, JSON.stringify(enrichedFounders));
-      console.log(`[runDeepResearch] Competitors:`, JSON.stringify(competitors));
-
-      const updatedScrapedData = {
-        ...parsedData,
-        founders: enrichedFounders,
-        competitors: competitors,
+      // Return immediately - the backend will call us back when done
+      return {
+        success: true,
+        message: "Deep research started. Results will be available shortly.",
+        async: true
       };
-
-      // Store the updated scraped data
-      console.log(`[runDeepResearch] Storing updated scraped data`);
-      await ctx.runMutation(api.mutations.storeScrapedData, {
-        startupName: args.startupName,
-        data: JSON.stringify(updatedScrapedData),
-      });
-
-      const updatedScrapedDataString = JSON.stringify(updatedScrapedData);
-
-      // Get active agents to re-analyze with enriched data
-      const activeAgents = await ctx.runQuery(api.queries.getActiveAgents);
-      console.log(`[runDeepResearch] Re-analyzing with ${activeAgents.length} agents`);
-
-      // Re-run all agent analyses with the enriched data
-      for (const [index, agent] of activeAgents.entries()) {
-        try {
-          await ctx.runAction(api.actions.analyzeWithCerebras, {
-            startupName: args.startupName,
-            agentId: agent.agentId,
-            agentName: agent.name,
-            agentPrompt: agent.prompt,
-            scrapedData: updatedScrapedDataString,
-          });
-        } finally {
-          if (index < activeAgents.length - 1) {
-            await sleep(RATE_LIMIT_DELAY_MS);
-          }
-        }
-      }
-
-      // Regenerate summaries with enriched data
-      console.log(`[runDeepResearch] Regenerating summaries`);
-      await ctx.runAction(api.actions.generateSummaries, {
-        startupName: args.startupName,
-        scrapedData: updatedScrapedDataString,
-      });
-
-      console.log(`[runDeepResearch] Completed successfully for ${args.startupName}`);
-      return { success: true, enrichedFounders, competitors };
     } catch (error) {
       console.error(`[runDeepResearch] Error for ${args.startupName}:`, error);
       throw error;
