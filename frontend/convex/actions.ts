@@ -228,6 +228,8 @@ export const runDeepResearch = action({
         },
         body: JSON.stringify({
           company_name: args.startupName,
+          company_bio: parsedData.companyBio || parsedData.company_bio || null,
+          company_website: parsedData.companyWebsite || parsedData.company_website || null,
           founders: {
             founders: founders.map((f: any) => ({
               name: f.name,
@@ -520,12 +522,6 @@ export const rerunAnalysis = action({
   args: { startupName: v.string() },
   handler: async (ctx, args): Promise<{ success: boolean }> => {
     console.log(`[rerunAnalysis] Starting rerun for: ${args.startupName}`);
-    const backendUrl = process.env.BACKEND_API_URL || "http://localhost:8000";
-    const apiKey = process.env.BACKEND_API_KEY;
-
-    if (!apiKey) {
-      throw new Error("BACKEND_API_KEY not configured");
-    }
 
     // Always scrape fresh data for rerun
     console.log(`[rerunAnalysis] Force re-scraping fresh data for ${args.startupName}`);

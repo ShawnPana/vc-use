@@ -62,6 +62,8 @@ class CompanyAnalysisRequest(BaseModel):
 class FounderResearchRequest(BaseModel):
     company_name: str
     founders: FounderList
+    company_bio: Optional[str] = None
+    company_website: Optional[str] = None
 
 class CompanyAnalysisResponse(BaseModel):
     success: bool
@@ -327,7 +329,7 @@ async def api_deep_research(
         # Run research_founders and research_competitors in parallel
         results = await asyncio.gather(
             research_founders(request.company_name, request.founders),
-            research_competitors(request.company_name)
+            research_competitors(request.company_name, request.company_bio, request.company_website)
         )
 
         (founders, browser1), (competitors, browser2) = results

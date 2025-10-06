@@ -212,24 +212,58 @@ async def research_hype(company_name: str) -> tuple:
         print('No result')
         raise Exception("Failed to research hype")
 
-async def research_competitors(company_name: str) -> tuple:
+async def research_competitors(company_name: str, company_bio: str = None, company_website: str = None) -> tuple:
+    context = f"""
+    Company: {company_name}
+    """
+    if company_website and company_website != "None":
+        context += f"\nWebsite: {company_website}"
+    if company_bio and company_bio != "None":
+        context += f"\nWhat they do: {company_bio}"
+
+    # Build search strategy based on available information
+    search_strategies = []
+    if company_bio and company_bio != "None":
+        # Extract key terms from bio for more relevant searches
+        search_strategies.append(f'Search for startups/companies that do similar things by querying variations like: "startups similar to [key terms from bio]", "alternatives to [key product/service]", "competitors in [industry/space]"')
+    search_strategies.append(f'Search for "{company_name} competitors"')
+    search_strategies.append(f'Search for "{company_name} alternatives"')
+
+    search_strategy_text = "\n            ".join([f"{i+1}. {s}" for i, s in enumerate(search_strategies)])
+
     task = f"""
-        - Use Google to find competitors of {company_name} by querying "{company_name} competitors"
-        - Look through the search results and identify the top 5 main competitors
+        - You are researching competitors for the following company:
+        {context}
+
+        - **SEARCH STRATEGY** - Use these approaches in order to find the most relevant competitors:
+            {search_strategy_text}
+
+        - Since this is a startup, prioritize finding competitors based on WHAT THEY DO rather than just the company name
+        - Identify the top 5 most relevant direct competitors that operate in the same space
+
         - **IMPORTANT**
-            - Just use the google search results and the summaries under the links, do not click on any links
-            - Create todos for each action you will take
-        - For each competitor, extract:
-            - The company name
-            - Their website URL if available
-            - A brief description of what they do
+            - For EACH competitor you find, do thorough research with multiple targeted searches:
+                1. Search for "[competitor name] startup" to find their official website
+                2. Search for "[competitor name] funding raised" to find funding information
+                3. Search for "[competitor name] product features" to understand what they offer
+                4. Search for "[competitor name] news" to get recent updates
+            - Use the google search results and summaries to compile comprehensive information
+            - Do not click on links, just use the search result summaries
+            - Create todos for each research action you will take
+
+        - For each competitor, compile a detailed description that includes:
+            - What they do (core product/service)
+            - Key features or differentiators
+            - Funding status or traction metrics if available
+            - Recent news or developments
+
         - Return ONLY a JSON object where each item matches this schema exactly:
         {{
             "competitors": [
                 {{
                     "name": string,
                     "website": string (or "None"),
-                    "description": string (or "None")
+                    "description": string (detailed description based on research, or "None")
                 }}
             ]
         }}

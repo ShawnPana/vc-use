@@ -192,10 +192,6 @@ function MainApp() {
   const competitors = parsedScrapedData?.competitors || [];
   const hasCompetitors = competitors.length > 0;
 
-  // Show deep research button if analysis is done but deep research hasn't been run
-  const analysisComplete = !isAnalyzing && scrapedData && parsedScrapedData;
-  const deepResearchNotRun = !hasCompetitors || (parsedScrapedData?.founders && parsedScrapedData.founders.some((f: any) => !f.bio || f.bio === "None"));
-  const showDeepResearchButton = analysisComplete && deepResearchNotRun && !isDeepResearching;
   const recentNewsItems = useMemo(() => {
     if (!hypeRecentNews) {
       return [] as string[];
@@ -308,28 +304,6 @@ function MainApp() {
       setErrorMessage(message);
     } finally {
       setIsRerunning(false);
-    }
-  };
-
-  const handleDeepResearch = async () => {
-    if (!searchedStartup) return;
-
-    setIsDeepResearching(true);
-    setErrorMessage(null);
-
-    try {
-      await runDeepResearch({ startupName: searchedStartup });
-    } catch (error) {
-      console.error("Deep research error:", error);
-      let message = "Failed to run deep research. Please try again.";
-
-      if (error instanceof Error && !error.message.includes("Server Error") && !error.message.includes("Uncaught")) {
-        message = error.message;
-      }
-
-      setErrorMessage(message);
-    } finally {
-      setIsDeepResearching(false);
     }
   };
 
@@ -779,7 +753,7 @@ function MainApp() {
               </div>
               <div className="dashboard__tile-body dashboard__tile-body--scroll">
                 {isSummariesLoading ? (
-                  <p className="dashboard__placeholder">Collecting founder background…</p>
+                  <p className="dashboard__placeholder">Researching founding team backgrounds and achievements…</p>
                 ) : getSummaryContent("founder_story") ? (
                   <p>{getSummaryContent("founder_story")}</p>
                 ) : (
@@ -1284,6 +1258,8 @@ function MainApp() {
                 </div>
               )}
             </>
+          ) : isSummariesLoading ? (
+            <p>Diving deep into founder backgrounds, experience, and credentials…</p>
           ) : (
             <p>No founder information available yet.</p>
           )}
