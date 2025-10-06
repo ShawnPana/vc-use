@@ -11,7 +11,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 // Call backend Browser Use API to scrape startup data
 export const scrapeStartupData = action({
   args: { startupName: v.string(), debug: v.optional(v.boolean()) },
-  handler: async (ctx, args) => {
+  handler: async (_ctx, args) => {
     const backendUrl = process.env.BACKEND_API_URL || "http://localhost:8000";
     const apiKey = process.env.BACKEND_API_KEY;
 
