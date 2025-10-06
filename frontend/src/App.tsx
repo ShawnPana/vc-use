@@ -1001,7 +1001,10 @@ function MainApp() {
       </main>
 
       {showAddAgentModal && (
-        <AddAgentModal onClose={() => setShowAddAgentModal(false)} />
+        <AddAgentModal
+          onClose={() => setShowAddAgentModal(false)}
+          currentStartup={searchedStartup}
+        />
       )}
 
       {/* Expanded Modal for Founder Story */}

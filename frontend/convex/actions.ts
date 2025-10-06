@@ -237,6 +237,48 @@ export const analyzeWithCerebras = action({
   },
 });
 
+// Action to analyze a single agent for a startup (when agent is added later)
+export const analyzeSingleAgent = action({
+  args: {
+    startupName: v.string(),
+    agentId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    try {
+      // Get the scraped data
+      const scrapedData = await ctx.runQuery(api.queries.getScrapedData, {
+        startupName: args.startupName,
+      });
+
+      if (!scrapedData?.data) {
+        throw new Error("No scraped data available for this startup. Please run a full analysis first.");
+      }
+
+      // Get the agent details
+      const agents = await ctx.runQuery(api.queries.getAgents);
+      const agent = agents.find(a => a.agentId === args.agentId);
+
+      if (!agent) {
+        throw new Error(`Agent ${args.agentId} not found`);
+      }
+
+      // Run the analysis for this single agent
+      await ctx.runAction(api.actions.analyzeWithCerebras, {
+        startupName: args.startupName,
+        agentId: agent.agentId,
+        agentName: agent.name,
+        agentPrompt: agent.prompt,
+        scrapedData: scrapedData.data,
+      });
+
+      return { success: true };
+    } catch (error) {
+      console.error("Error in analyzeSingleAgent:", error);
+      throw error;
+    }
+  },
+});
+
 // Orchestrator action to run all analyses
 export const analyzeStartup = action({
   args: { startupName: v.string(), debug: v.optional(v.boolean()) },

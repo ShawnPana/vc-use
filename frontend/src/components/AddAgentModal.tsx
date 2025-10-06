@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { X } from "lucide-react";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery, useAction } from "convex/react";
 import { api } from "../../convex/_generated/api";
 
 interface AddAgentModalProps {
   onClose: () => void;
+  currentStartup?: string | null;
 }
 
-export function AddAgentModal({ onClose }: AddAgentModalProps) {
+export function AddAgentModal({ onClose, currentStartup }: AddAgentModalProps) {
   const [agentId, setAgentId] = useState("");
   const [name, setName] = useState("");
   const [prompt, setPrompt] = useState("");
@@ -15,6 +16,7 @@ export function AddAgentModal({ onClose }: AddAgentModalProps) {
   const [accent, setAccent] = useState("#818cf8");
 
   const upsertAgent = useMutation(api.mutations.upsertAgent);
+  const analyzeSingleAgent = useAction(api.actions.analyzeSingleAgent);
   const agents = useQuery(api.queries.getAgents);
 
   const handleCreate = async () => {
@@ -25,8 +27,10 @@ export function AddAgentModal({ onClose }: AddAgentModalProps) {
 
     try {
       const maxOrder = agents?.reduce((max, a) => Math.max(max, a.order), 0) ?? 0;
+      const normalizedAgentId = agentId.toLowerCase().replace(/\s+/g, '_');
+
       await upsertAgent({
-        agentId: agentId.toLowerCase().replace(/\s+/g, '_'),
+        agentId: normalizedAgentId,
         name,
         prompt,
         icon,
@@ -34,6 +38,17 @@ export function AddAgentModal({ onClose }: AddAgentModalProps) {
         isActive: true,
         order: maxOrder + 1,
       });
+
+      // If there's a current startup being viewed, analyze it with the new agent
+      if (currentStartup) {
+        analyzeSingleAgent({
+          startupName: currentStartup,
+          agentId: normalizedAgentId,
+        }).catch((error) => {
+          console.error("Failed to analyze with new agent:", error);
+        });
+      }
+
       onClose();
     } catch (error) {
       console.error("Failed to create agent:", error);
