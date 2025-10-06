@@ -3,85 +3,10 @@
 import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
-import { getAuthUserId } from "@convex-dev/auth/server";
 
 const RATE_LIMIT_DELAY_MS = 500;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// Agent configurations with accent colors
-const AGENTS = [
-  {
-    id: "diligence",
-    name: "Due Diligence",
-    prompt: "You are a legal and compliance analyst conducting due diligence. Extract and list:\n\n1. RED FLAGS: Legal issues, controversies, regulatory concerns, or ethical problems\n2. GOVERNANCE: Board composition, investor conflicts, corporate structure issues\n3. COMPLIANCE: Industry regulations they must follow and their compliance status\n4. RISKS: Key operational, legal, or reputational risks\n\nBe factual and cite specific issues found. Format as bullet points under each section header.",
-    icon: "diligence",
-    accent: "#ef4444",
-  },
-  {
-    id: "financials",
-    name: "Financial Analysis",
-    prompt: "You are a financial analyst. Extract and calculate specific metrics:\n\n1. FUNDING: Total raised, valuation, last round details, runway estimate\n2. UNIT ECONOMICS: CAC, LTV, LTV:CAC ratio if available\n3. BURN RATE: Monthly burn, runway in months\n4. REVENUE MODEL: How they make money, pricing strategy\n5. PROFITABILITY: Path to profitability, current margins\n\nProvide specific numbers where available. If data is missing, note it. Format as sections with metrics.",
-    icon: "financials",
-    accent: "#f59e0b",
-  },
-  {
-    id: "market",
-    name: "Market Sizing",
-    prompt: "You are a market research analyst. Provide:\n\n1. TAM/SAM/SOM: Total addressable, serviceable addressable, serviceable obtainable markets (with $ figures)\n2. MARKET GROWTH: Industry growth rate, trends, projections\n3. MARKET SHARE: Current position, growth trajectory\n4. TIMING: Why now? Market inflection points\n\nCite sources and provide specific numbers. Format with clear headers and bullet points.",
-    icon: "market",
-    accent: "#8b5cf6",
-  },
-  {
-    id: "competitive",
-    name: "Competitive Analysis",
-    prompt: "You are a competitive intelligence analyst. Provide:\n\n1. DIRECT COMPETITORS: List top 3-5 with brief descriptions\n2. DIFFERENTIATION: What makes this company unique vs competitors\n3. COMPETITIVE MOATS: Defensibility (network effects, IP, scale, brand)\n4. MARKET POSITION: Leader/challenger/niche player\n5. THREATS: Who could disrupt them?\n\nBe specific about competitor names and differentiating features.",
-    icon: "competitive",
-    accent: "#06b6d4",
-  },
-  {
-    id: "team",
-    name: "Team Assessment",
-    prompt: "You are an executive recruiter evaluating the founding team:\n\n1. FOUNDERS: Name, background, relevant experience, previous companies/exits\n2. EXPERTISE: Domain knowledge and complementary skills\n3. GAPS: Missing skill sets or roles needed\n4. TRACK RECORD: Previous successes/failures, lessons learned\n5. EXECUTION ABILITY: Evidence they can build and scale\n\nProvide factual backgrounds. Note red flags or strengths.",
-    icon: "team",
-    accent: "#10b981",
-  },
-  {
-    id: "technology",
-    name: "Technology Audit",
-    prompt: "You are a technical architect assessing their technology:\n\n1. TECH STACK: Known technologies, infrastructure choices\n2. SCALABILITY: Can it handle 10x/100x growth?\n3. TECHNICAL MOAT: Proprietary tech, patents, unique algorithms\n4. FEASIBILITY: Is their product technically achievable?\n5. INNOVATION: Novel approach vs incremental improvement?\n\nBe specific about technologies and assess technical risks.",
-    icon: "technology",
-    accent: "#3b82f6",
-  },
-];
-
-// Action to seed default agents to database
-export const seedDefaultAgents = action({
-  args: {},
-  handler: async (ctx): Promise<{ seeded: boolean; count: number }> => {
-    // Get auth user ID in the action
-    const userId = await getAuthUserId(ctx);
-    if (userId === null) {
-      throw new Error("User must be authenticated");
-    }
-
-    // Use internal mutation to avoid circular dependency
-    const result = await ctx.runMutation(api.mutations.seedAgentsIfEmpty, {
-      userId: userId,
-      agents: AGENTS.map((agent, index) => ({
-        agentId: agent.id,
-        name: agent.name,
-        prompt: agent.prompt,
-        icon: agent.icon,
-        accent: agent.accent,
-        isActive: true,
-        order: index,
-      })),
-    });
-
-    return result;
-  },
-});
 
 // Call backend Browser Use API to scrape startup data
 export const scrapeStartupData = action({
@@ -266,6 +191,13 @@ export const enrichFounderInfo = action({
         return;
       }
 
+      // Check if founders are already enriched (have bios)
+      const foundersAlreadyEnriched = founders.every((f: any) => f.bio && f.bio !== "None");
+      if (foundersAlreadyEnriched) {
+        console.log("Founders already enriched, skipping research");
+        return { success: true, enrichedFounders: founders };
+      }
+
       // Call backend to research founders
       const response = await fetch(`${backendUrl}/api/research-founders`, {
         method: "POST",
@@ -321,48 +253,33 @@ export const enrichFounderInfo = action({
         data: JSON.stringify(updatedScrapedData),
       });
 
-      // Regenerate the founder_story summary with enriched data
-      const cerebrasApiKey = process.env.CEREBRAS_API_KEY;
-      if (cerebrasApiKey) {
-        const founderBios = enrichedFounders
-          .map((f: any) => `${f.name}: ${f.bio || 'Bio not available'}`)
-          .join('\n');
+      const updatedScrapedDataString = JSON.stringify(updatedScrapedData);
 
-        const summaryResponse = await fetch("https://api.cerebras.ai/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${cerebrasApiKey}`,
-          },
-          body: JSON.stringify({
-            model: "llama-3.3-70b",
-            messages: [
-              {
-                role: "system",
-                content: `Based on the following founder information, create a brief, compelling summary of the founders' background and how they came together to start this company. Focus on their unique experiences and complementary skills. 2-3 sentences max.\n\nFounder Information:\n${founderBios}`,
-              },
-              {
-                role: "user",
-                content: "Generate the summary based on the information in the system prompt.",
-              },
-            ],
-            temperature: 0.7,
-            max_tokens: 200,
-          }),
-        });
+      // Get active agents to re-analyze with enriched data
+      const activeAgents = await ctx.runQuery(api.queries.getActiveAgents);
 
-        if (summaryResponse.ok) {
-          const summaryData = await summaryResponse.json();
-          const content = summaryData.choices[0]?.message?.content || "";
-
-          // Update the founder_story summary
-          await ctx.runMutation(api.mutations.createSummary, {
+      // Re-run all agent analyses with the enriched founder data
+      for (const [index, agent] of activeAgents.entries()) {
+        try {
+          await ctx.runAction(api.actions.analyzeWithCerebras, {
             startupName: args.startupName,
-            summaryType: "founder_story",
-            content,
+            agentId: agent.agentId,
+            agentName: agent.name,
+            agentPrompt: agent.prompt,
+            scrapedData: updatedScrapedDataString,
           });
+        } finally {
+          if (index < activeAgents.length - 1) {
+            await sleep(RATE_LIMIT_DELAY_MS);
+          }
         }
       }
+
+      // Regenerate summaries with enriched data
+      await ctx.runAction(api.actions.generateSummaries, {
+        startupName: args.startupName,
+        scrapedData: updatedScrapedDataString,
+      });
 
       return { success: true, enrichedFounders };
     } catch (error) {
@@ -391,7 +308,7 @@ export const analyzeSingleAgent = action({
 
       // Get the agent details
       const agents = await ctx.runQuery(api.queries.getAgents);
-      const agent = agents.find(a => a.agentId === args.agentId);
+      const agent = agents.find((a: any) => a.agentId === args.agentId);
 
       if (!agent) {
         throw new Error(`Agent ${args.agentId} not found`);
@@ -414,25 +331,52 @@ export const analyzeSingleAgent = action({
   },
 });
 
+// Rerun analysis for a cached company (forces fresh data scraping)
+export const rerunAnalysis = action({
+  args: { startupName: v.string() },
+  handler: async (ctx, args): Promise<{ success: boolean }> => {
+    // This is the same as analyzeStartup, but it's a separate action
+    // so the frontend can call it explicitly to force a refresh
+    await ctx.runAction(api.actions.analyzeStartup, {
+      startupName: args.startupName,
+      debug: false,
+    });
+    return { success: true };
+  },
+});
+
 // Orchestrator action to run all analyses
 export const analyzeStartup = action({
   args: { startupName: v.string(), debug: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
     try {
-      // First, scrape the data
-      const scrapedData = await ctx.runAction(api.actions.scrapeStartupData, {
+      // Check if we already have scraped data cached
+      const cachedData = await ctx.runQuery(api.queries.getScrapedData, {
         startupName: args.startupName,
-        debug: args.debug,
       });
 
-    const scrapedDataString = JSON.stringify(scrapedData);
+      let scrapedDataString: string;
+
+      if (cachedData?.data) {
+        // Use cached data instead of re-scraping
+        console.log(`Using cached data for ${args.startupName}`);
+        scrapedDataString = cachedData.data;
+      } else {
+        // No cached data, scrape fresh data
+        console.log(`Scraping fresh data for ${args.startupName}`);
+        const scrapedData = await ctx.runAction(api.actions.scrapeStartupData, {
+          startupName: args.startupName,
+          debug: args.debug,
+        });
+        scrapedDataString = JSON.stringify(scrapedData);
+      }
 
     // Get active agents from database
     let dbAgents = await ctx.runQuery(api.queries.getActiveAgents);
 
     // If no agents in DB, seed with default agents
     if (dbAgents.length === 0) {
-      await ctx.runAction(api.actions.seedDefaultAgents);
+      await ctx.runMutation(api.mutations.initializeMyAgents);
       // Re-fetch agents
       dbAgents = await ctx.runQuery(api.queries.getActiveAgents);
     }
@@ -460,14 +404,6 @@ export const analyzeStartup = action({
       await ctx.runAction(api.actions.generateSummaries, {
         startupName: args.startupName,
         scrapedData: scrapedDataString,
-      });
-
-      // After initial analysis completes, enrich founder info in the background
-      // This will update the scraped data and regenerate the founder_story summary
-      ctx.runAction(api.actions.enrichFounderInfo, {
-        startupName: args.startupName,
-      }).catch((error) => {
-        console.error("Failed to enrich founder info:", error);
       });
 
       return { success: true };
@@ -498,16 +434,20 @@ export const generateSummaries = action({
     const scrapedData = JSON.parse(args.scrapedData);
 
     // For founder_story, use the actual founder bios if available
-    const founderBios = scrapedData.founders
-      ?.map((f: any) => `${f.name}: ${f.bio || 'Bio not available'}`)
-      .join('\n') || '';
+    const founders = scrapedData.founders || [];
+    const founderBios = founders
+      .map((f: any) => `${f.name}: ${f.bio || 'Bio not available'}`)
+      .join('\n');
+
+    // Only generate founder_story if we have founder information
+    const hasFounderInfo = founders.length > 0 && founderBios.trim().length > 0;
 
     const summaryTypes = [
-      {
+      ...(hasFounderInfo ? [{
         type: "founder_story",
         prompt: `Based on the following founder information, create a brief, compelling summary of the founders' background and how they came together to start this company. Focus on their unique experiences and complementary skills. 2-3 sentences max.\n\nFounder Information:\n${founderBios}`,
-        useDirectData: founderBios.length > 0,
-      },
+        useDirectData: true,
+      }] : []),
       {
         type: "market_position",
         prompt: "Summarize the company's position in the competitive landscape and their unique differentiation. 2-3 sentences max.",
