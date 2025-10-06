@@ -779,7 +779,7 @@ function MainApp() {
               </div>
               <div className="dashboard__tile-body dashboard__tile-body--scroll">
                 {isSummariesLoading ? (
-                  <p className="dashboard__placeholder">Collecting founder background…</p>
+                  <p className="dashboard__placeholder">Researching founding team backgrounds and achievements…</p>
                 ) : getSummaryContent("founder_story") ? (
                   <p>{getSummaryContent("founder_story")}</p>
                 ) : (
@@ -1284,6 +1284,8 @@ function MainApp() {
                 </div>
               )}
             </>
+          ) : isSummariesLoading ? (
+            <p>Diving deep into founder backgrounds, experience, and credentials…</p>
           ) : (
             <p>No founder information available yet.</p>
           )}

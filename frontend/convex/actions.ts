@@ -228,6 +228,8 @@ export const runDeepResearch = action({
         },
         body: JSON.stringify({
           company_name: args.startupName,
+          company_bio: parsedData.companyBio || parsedData.company_bio || null,
+          company_website: parsedData.companyWebsite || parsedData.company_website || null,
           founders: {
             founders: founders.map((f: any) => ({
               name: f.name,
