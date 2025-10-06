@@ -3,3 +3,4 @@ browser_use
 python-dotenv
 fastapi
 pydantic
+psutil

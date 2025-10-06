@@ -5,12 +5,17 @@ from pydantic import BaseModel
 from typing import Optional
 import os
 import asyncio
+import tracemalloc
+import psutil
 from dotenv import load_dotenv
 
 from scrapers.analyze_company import analyze_company, research_founders, research_hype
 from scrapers.models import Company, FounderList, Founder, SocialMedia, Hype
 
 load_dotenv()
+
+# Start memory tracking
+tracemalloc.start()
 
 app = FastAPI(
     title="VC Use API",
@@ -80,7 +85,49 @@ async def root():
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy"}
+    # Get process memory info
+    process = psutil.Process()
+    memory_info = process.memory_info()
+
+    # Get system memory info
+    system_memory = psutil.virtual_memory()
+
+    # Get top memory consumers from tracemalloc
+    snapshot = tracemalloc.take_snapshot()
+    top_stats = snapshot.statistics('lineno')[:10]
+
+    top_consumers = [
+        {
+            "source": str(stat.traceback),
+            "size_mb": round(stat.size / 1024 / 1024, 2),
+            "count": stat.count
+        }
+        for stat in top_stats
+    ]
+
+    # Convert bytes to MB
+    rss_mb = round(memory_info.rss / 1024 / 1024, 2)
+    vms_mb = round(memory_info.vms / 1024 / 1024, 2)
+    system_available_mb = round(system_memory.available / 1024 / 1024, 2)
+
+    # Determine status based on memory usage
+    memory_percent = process.memory_percent()
+    status = "healthy"
+    if memory_percent > 80:
+        status = "critical"
+    elif memory_percent > 60:
+        status = "degraded"
+
+    return {
+        "status": status,
+        "memory": {
+            "rss_mb": rss_mb,
+            "vms_mb": vms_mb,
+            "percent": round(memory_percent, 2),
+            "system_available_mb": system_available_mb
+        },
+        "top_memory_consumers": top_consumers
+    }
 
 @app.post("/api/cleanup")
 async def cleanup_sessions(api_key: str = Security(verify_api_key)):
