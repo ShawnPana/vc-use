@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useNavigate, useParams, Routes, Route } from "react-router-dom";
+import { useNavigate, useParams, Routes, Route, useLocation } from "react-router-dom";
 import { useAction, useQuery, useMutation } from "convex/react";
 import { useAuthActions, useAuthToken } from "@convex-dev/auth/react";
 import { api } from "../convex/_generated/api";
@@ -94,8 +94,10 @@ declare global {
 
 function MainApp() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { company: urlCompany } = useParams<{ company: string }>();
   const isPortfolioRoute = window.location.pathname === '/portfolio';
+  const [previousRoute, setPreviousRoute] = useState<string>('/');
 
   const [startupName, setStartupName] = useState("");
   const [searchedStartup, setSearchedStartup] = useState<string | null>(null);
@@ -115,6 +117,8 @@ function MainApp() {
   useEffect(() => {
     if (urlCompany && urlCompany !== searchedStartup) {
       setSearchedStartup(decodeURIComponent(urlCompany));
+    } else if (!urlCompany && searchedStartup) {
+      setSearchedStartup(null);
     }
   }, [urlCompany, searchedStartup]);
 
@@ -126,6 +130,17 @@ function MainApp() {
       setShowPortfolio(false);
     }
   }, [isPortfolioRoute, showPortfolio]);
+
+  // Track previous route for back button
+  useEffect(() => {
+    // Only update previous route if we're currently on a company page
+    if (location.pathname.startsWith('/company/')) {
+      const state = location.state as { from?: string } | null;
+      if (state?.from) {
+        setPreviousRoute(state.from);
+      }
+    }
+  }, [location]);
 
   // Expose debug setter to window for devtools access
   useEffect(() => {
@@ -265,7 +280,7 @@ function MainApp() {
     if (!startupName.trim()) return;
 
     setSearchedStartup(startupName);
-    void navigate(`/company/${encodeURIComponent(startupName)}`);
+    void navigate(`/company/${encodeURIComponent(startupName)}`, { state: { from: '/' } });
     setIsAnalyzing(true);
     setErrorMessage(null);
 
@@ -275,10 +290,12 @@ function MainApp() {
 
       // After initial analysis completes, automatically run deep research (founders + competitors) in background
       setIsDeepResearching(true);
+      setIsEnrichingFounders(true);
       runDeepResearch({ startupName }).catch((error) => {
         console.error("Failed to run deep research:", error);
       }).finally(() => {
         setIsDeepResearching(false);
+        setIsEnrichingFounders(false);
       });
     } catch (error) {
       console.error("Analysis error:", error);
@@ -313,10 +330,12 @@ function MainApp() {
 
       // Automatically run deep research after refresh
       setIsDeepResearching(true);
-      runDeepResearch({ startupName: searchedStartup }).catch((error) => {
+      setIsEnrichingFounders(true);
+      await runDeepResearch({ startupName: searchedStartup }).catch((error) => {
         console.error("Failed to run deep research:", error);
       }).finally(() => {
         setIsDeepResearching(false);
+        setIsEnrichingFounders(false);
       });
     } catch (error) {
       console.error("Rerun error:", error);
@@ -374,7 +393,7 @@ function MainApp() {
         <PortfolioPage
           onSelectCompany={(companyName) => {
             setSearchedStartup(companyName);
-            void navigate(`/company/${encodeURIComponent(companyName)}`);
+            void navigate(`/company/${encodeURIComponent(companyName)}`, { state: { from: '/portfolio' } });
             setShowPortfolio(false);
           }}
           onBack={() => {
@@ -511,7 +530,7 @@ function MainApp() {
           </div>
         )}
 
-        {!searchedStartup && (
+        {!urlCompany && (
           <section className="hero" aria-labelledby="hero-heading">
             <div className="hero-logo">
               <Logo />
@@ -566,7 +585,7 @@ function MainApp() {
                     setStartupName(example);
                     setTimeout(() => {
                       setSearchedStartup(example);
-                      void navigate(`/company/${encodeURIComponent(example)}`);
+                      void navigate(`/company/${encodeURIComponent(example)}`, { state: { from: '/' } });
                       setIsAnalyzing(true);
                       analyzeStartup({ startupName: example, debug: debugMode })
                         .then(() => {
@@ -590,7 +609,7 @@ function MainApp() {
           </section>
         )}
 
-        {searchedStartup && (
+        {searchedStartup && urlCompany && (
           <>
             {/* Back & Rerun Buttons - Top Left */}
             <div style={{
@@ -604,7 +623,7 @@ function MainApp() {
               <button
                 onClick={() => {
                   setSearchedStartup(null);
-                  void navigate('/');
+                  void navigate(previousRoute);
                 }}
                 style={{
                   background: "var(--color-card)",
@@ -812,7 +831,7 @@ function MainApp() {
                               )}
                             </div>
                           )}
-                          {isEnrichingFounders && (!founder.bio || founder.bio === "None") && (
+                          {isEnrichingFounders && (
                             <div className="loading-dots" style={{ display: "flex", gap: "0.15rem" }}>
                               <span style={{ width: "4px", height: "4px", borderRadius: "50%", background: "var(--color-primary)", animation: "blink 1.4s infinite both" }}></span>
                               <span style={{ width: "4px", height: "4px", borderRadius: "50%", background: "var(--color-primary)", animation: "blink 1.4s infinite both", animationDelay: "0.2s" }}></span>
@@ -822,9 +841,21 @@ function MainApp() {
                         </div>
                       ))}
                     </div>
-                    {getSummaryContent("founder_story") && !getSummaryContent("founder_story").toLowerCase().includes("unfortunately") && (
-                      <p style={{ fontSize: "0.95rem", lineHeight: 1.6, paddingTop: "0.25rem" }}>{getSummaryContent("founder_story")}</p>
-                    )}
+                    {(() => {
+                      const founderStory = getSummaryContent("founder_story");
+                      const hasValidStory = founderStory &&
+                                           founderStory !== '""' &&
+                                           founderStory.trim() !== "" &&
+                                           founderStory !== 'None' &&
+                                           !founderStory.toLowerCase().includes("unfortunately");
+
+                      if (isEnrichingFounders && !hasValidStory) {
+                        return <p className="dashboard__placeholder" style={{ paddingTop: "0.25rem" }}>Researching founder backgrounds…</p>;
+                      } else if (hasValidStory) {
+                        return <p style={{ fontSize: "0.95rem", lineHeight: 1.6, paddingTop: "0.25rem" }}>{founderStory}</p>;
+                      }
+                      return null;
+                    })()}
                   </div>
                 ) : isEnrichingFounders || isSummariesLoading ? (
                   <p className="dashboard__placeholder">Researching founding team…</p>
