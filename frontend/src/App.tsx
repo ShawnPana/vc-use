@@ -1277,9 +1277,9 @@ function MainApp() {
           <div style={{ height: "260px", maxHeight: "320px" }}>
             <HypeMetricsChart metrics={hypeMetrics} />
           </div>
-          <div style={{ marginTop: "2rem" }}>
-            <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Metric Callouts</h3>
-            {hypeMetrics.length > 0 ? (
+          {hypeMetrics.length > 0 ? (
+            <div style={{ marginTop: "2rem" }}>
+              <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Metric Callouts</h3>
               <div style={{ display: "grid", gap: "1rem" }}>
                 {hypeMetrics.slice(0, 4).map((metric: ParsedMetric, idx: number) => (
                   <div
@@ -1301,20 +1301,17 @@ function MainApp() {
                   </div>
                 ))}
               </div>
-            ) : (
-              <p style={{ fontSize: "0.95rem", color: "var(--color-muted-foreground)" }}>
-                Metrics will populate after hype research collects traction numbers.
+              <p style={{ marginTop: "1.5rem", fontSize: "0.95rem", lineHeight: 1.6 }}>
+                {getSummaryContent("market_position") || "Market position analysis will appear here once the analysis is complete."}
               </p>
-            )}
-            <p style={{ marginTop: "1.5rem", fontSize: "0.95rem", lineHeight: 1.6 }}>
-              {getSummaryContent("market_position") || "Market position analysis will appear here once the analysis is complete."}
-            </p>
-          </div>
-          {hypeSummary && (
-            <div style={{ marginTop: "2rem" }}>
-              <h3 style={{ fontSize: "1.2rem", fontWeight: 600, marginBottom: "1.25rem", color: "var(--color-foreground)" }}>Hype Narrative</h3>
-              <p style={{ fontSize: "0.95rem", lineHeight: 1.6 }}>{hypeSummary}</p>
             </div>
+          ) : (
+            hypeSummary && (
+              <div style={{ marginTop: "2rem" }}>
+                <h3 style={{ fontSize: "1.2rem", fontWeight: 600, marginBottom: "1.25rem", color: "var(--color-foreground)" }}>Hype Narrative</h3>
+                <p style={{ fontSize: "0.95rem", lineHeight: 1.6 }}>{hypeSummary}</p>
+              </div>
+            )
           )}
         </div>
       </ExpandedModal>
@@ -1471,7 +1468,7 @@ function MainApp() {
             </div>
           </div>
 
-          {hypeSummary && (
+          {hypeMetrics.length === 0 && hypeSummary && (
             <div style={{ marginTop: "2rem" }}>
               <h3 style={{ fontSize: "1.2rem", fontWeight: 600, marginBottom: "1rem", color: "var(--color-foreground)" }}>Market Narrative</h3>
               <p style={{ fontSize: "0.95rem", lineHeight: 1.6 }}>{hypeSummary}</p>

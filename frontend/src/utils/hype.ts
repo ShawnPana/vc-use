@@ -48,7 +48,7 @@ function extractNumericValue(text: string): number | undefined {
 }
 
 export function parseHypeNumbers(numbers?: string | null): ParsedMetric[] {
-  if (!numbers) {
+  if (!numbers || numbers.trim().toLowerCase() === "none") {
     return [];
   }
 
@@ -59,7 +59,8 @@ export function parseHypeNumbers(numbers?: string | null): ParsedMetric[] {
   const lines = normalized
     .split(LINE_SPLIT_REGEX)
     .map(sanitizeLine)
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter(line => line.toLowerCase() !== "none");
 
   const metrics: ParsedMetric[] = lines.map((line) => {
     const delimiterMatch = line.match(DELIMITER_REGEX);
