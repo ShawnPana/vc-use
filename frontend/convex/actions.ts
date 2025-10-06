@@ -522,12 +522,6 @@ export const rerunAnalysis = action({
   args: { startupName: v.string() },
   handler: async (ctx, args): Promise<{ success: boolean }> => {
     console.log(`[rerunAnalysis] Starting rerun for: ${args.startupName}`);
-    const backendUrl = process.env.BACKEND_API_URL || "http://localhost:8000";
-    const apiKey = process.env.BACKEND_API_KEY;
-
-    if (!apiKey) {
-      throw new Error("BACKEND_API_KEY not configured");
-    }
 
     // Always scrape fresh data for rerun
     console.log(`[rerunAnalysis] Force re-scraping fresh data for ${args.startupName}`);
