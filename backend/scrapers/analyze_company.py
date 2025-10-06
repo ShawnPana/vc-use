@@ -126,8 +126,7 @@ async def research_founders(company_name: str, founders: FounderList) -> dict:
     llm = ChatGoogle(model="gemini-flash-latest")
 
     browser = Browser(
-        use_cloud=True,
-        keep_alive=True
+        use_cloud=True
     )
 
     agent = Agent(
