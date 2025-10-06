@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 from typing import Optional
+from contextlib import asynccontextmanager
 import os
 import asyncio
 import tracemalloc
@@ -17,10 +18,19 @@ load_dotenv()
 # Start memory tracking
 tracemalloc.start()
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    yield
+    # Shutdown
+    print("Shutting down and cleaning up browser sessions...")
+    # Add any cleanup logic here if needed
+
 app = FastAPI(
     title="VC Use API",
     description="API for venture capital company research and analysis",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # Configure CORS
@@ -118,7 +128,7 @@ async def health():
     elif memory_percent > 60:
         status = "degraded"
 
-    return {
+    response = {
         "status": status,
         "memory": {
             "rss_mb": rss_mb,
@@ -128,6 +138,11 @@ async def health():
         },
         "top_memory_consumers": top_consumers
     }
+
+    # Log memory stats so they appear in Render logs
+    print(f"🏥 Health Check - Status: {status} | Memory: {rss_mb}MB ({memory_percent:.2f}%) | Available: {system_available_mb}MB")
+
+    return response
 
 @app.post("/api/cleanup")
 async def cleanup_sessions(api_key: str = Security(verify_api_key)):
@@ -258,11 +273,6 @@ async def api_full_analysis(
             error=str(e)
         )
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown - kill any active browser sessions"""
-    print("Shutting down and cleaning up browser sessions...")
-    # Add any cleanup logic here if needed
 
 if __name__ == "__main__":
     import uvicorn
