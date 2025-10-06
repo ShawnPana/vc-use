@@ -683,7 +683,7 @@ export const generateSummaries = action({
     const summaryTypes = [
       ...(hasFounderInfo ? [{
         type: "founder_story",
-        prompt: `Based on the following founder information, create a brief, compelling summary of the founders' background and how they came together to start this company. Focus on their unique experiences and complementary skills. 2-3 sentences max.\n\nIMPORTANT: If the founder information is incomplete or just contains names without bios, DO NOT generate a summary. Return an empty string instead. Only create a summary if there is actual biographical information about the founders.\n\nFounder Information:\n${founderBios}`,
+        prompt: `Based on the following founder information, create a brief, compelling summary of the founders' background and how they came together to start this company. Focus on their unique experiences and complementary skills. 2-3 sentences max.\n\nIMPORTANT: Always create a summary even if biographical information is limited. If you truly cannot create any summary, respond with exactly the word "None" and nothing else. Do NOT return empty strings or quotes.\n\nFounder Information:\n${founderBios}`,
         useDirectData: true,
       }] : []),
       {
@@ -732,7 +732,13 @@ export const generateSummaries = action({
 
         if (response.ok) {
           const data = await response.json();
-          const content = data.choices[0]?.message?.content || "";
+          let content = data.choices[0]?.message?.content || "";
+
+          // Clean up content - if it's empty, just quotes, or whitespace, set to "None"
+          content = content.trim();
+          if (content === "" || content === '""' || content === "''") {
+            content = "None";
+          }
 
           await ctx.runMutation(api.mutations.createSummary, {
             startupName: args.startupName,
