@@ -113,6 +113,25 @@ export const createSummary = mutation({
       throw new Error("User must be authenticated");
     }
 
+    // Check if a summary of this type already exists
+    const existing = await ctx.db
+      .query("summaries")
+      .withIndex("by_user_and_startup", (q) =>
+        q.eq("userId", userId).eq("startupName", args.startupName)
+      )
+      .filter((q) => q.eq(q.field("summaryType"), args.summaryType))
+      .first();
+
+    if (existing) {
+      // Update existing summary
+      await ctx.db.patch(existing._id, {
+        content: args.content,
+        timestamp: Date.now(),
+      });
+      return existing._id;
+    }
+
+    // Create new summary
     return await ctx.db.insert("summaries", {
       userId,
       startupName: args.startupName,

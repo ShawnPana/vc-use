@@ -237,6 +237,141 @@ export const analyzeWithCerebras = action({
   },
 });
 
+// Action to enrich founder information by calling the backend research_founders endpoint
+export const enrichFounderInfo = action({
+  args: { startupName: v.string() },
+  handler: async (ctx, args) => {
+    const backendUrl = process.env.BACKEND_API_URL || "http://localhost:8000";
+    const apiKey = process.env.BACKEND_API_KEY;
+
+    if (!apiKey) {
+      throw new Error("BACKEND_API_KEY not configured");
+    }
+
+    try {
+      // Get the current scraped data to extract founder names
+      const scrapedData = await ctx.runQuery(api.queries.getScrapedData, {
+        startupName: args.startupName,
+      });
+
+      if (!scrapedData?.data) {
+        throw new Error("No scraped data available");
+      }
+
+      const parsedData = JSON.parse(scrapedData.data);
+      const founders = parsedData.founders || [];
+
+      if (founders.length === 0) {
+        console.log("No founders to enrich");
+        return;
+      }
+
+      // Call backend to research founders
+      const response = await fetch(`${backendUrl}/api/research-founders`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": apiKey,
+        },
+        body: JSON.stringify({
+          company_name: args.startupName,
+          founders: {
+            founders: founders.map((f: any) => ({
+              name: f.name,
+              social_media: {
+                linkedin: f.linkedin || "None",
+                X: f.twitter || "None",
+                other: "None",
+              },
+              personal_website: f.personalWebsite || "None",
+              bio: f.bio || "None",
+            })),
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Backend API error: ${response.status} ${errorText}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.success || !result.data) {
+        throw new Error("Failed to enrich founder information");
+      }
+
+      // Update the scraped data with enriched founder info
+      const enrichedFounders = result.data.founders.map((f: any) => ({
+        name: f.name,
+        linkedin: f.social_media?.linkedin,
+        twitter: f.social_media?.X,
+        personalWebsite: f.personal_website,
+        bio: f.bio,
+      }));
+
+      const updatedScrapedData = {
+        ...parsedData,
+        founders: enrichedFounders,
+      };
+
+      // Store the updated scraped data
+      await ctx.runMutation(api.mutations.storeScrapedData, {
+        startupName: args.startupName,
+        data: JSON.stringify(updatedScrapedData),
+      });
+
+      // Regenerate the founder_story summary with enriched data
+      const cerebrasApiKey = process.env.CEREBRAS_API_KEY;
+      if (cerebrasApiKey) {
+        const founderBios = enrichedFounders
+          .map((f: any) => `${f.name}: ${f.bio || 'Bio not available'}`)
+          .join('\n');
+
+        const summaryResponse = await fetch("https://api.cerebras.ai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${cerebrasApiKey}`,
+          },
+          body: JSON.stringify({
+            model: "llama-3.3-70b",
+            messages: [
+              {
+                role: "system",
+                content: `Based on the following founder information, create a brief, compelling summary of the founders' background and how they came together to start this company. Focus on their unique experiences and complementary skills. 2-3 sentences max.\n\nFounder Information:\n${founderBios}`,
+              },
+              {
+                role: "user",
+                content: "Generate the summary based on the information in the system prompt.",
+              },
+            ],
+            temperature: 0.7,
+            max_tokens: 200,
+          }),
+        });
+
+        if (summaryResponse.ok) {
+          const summaryData = await summaryResponse.json();
+          const content = summaryData.choices[0]?.message?.content || "";
+
+          // Update the founder_story summary
+          await ctx.runMutation(api.mutations.createSummary, {
+            startupName: args.startupName,
+            summaryType: "founder_story",
+            content,
+          });
+        }
+      }
+
+      return { success: true, enrichedFounders };
+    } catch (error) {
+      console.error("Error enriching founder info:", error);
+      throw error;
+    }
+  },
+});
+
 // Action to analyze a single agent for a startup (when agent is added later)
 export const analyzeSingleAgent = action({
   args: {
@@ -325,6 +460,14 @@ export const analyzeStartup = action({
       await ctx.runAction(api.actions.generateSummaries, {
         startupName: args.startupName,
         scrapedData: scrapedDataString,
+      });
+
+      // After initial analysis completes, enrich founder info in the background
+      // This will update the scraped data and regenerate the founder_story summary
+      ctx.runAction(api.actions.enrichFounderInfo, {
+        startupName: args.startupName,
+      }).catch((error) => {
+        console.error("Failed to enrich founder info:", error);
       });
 
       return { success: true };
