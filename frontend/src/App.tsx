@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useNavigate, useParams, Routes, Route } from "react-router-dom";
 import { useAction, useQuery, useMutation } from "convex/react";
 import { useAuthActions, useAuthToken } from "@convex-dev/auth/react";
 import { api } from "../convex/_generated/api";
@@ -92,6 +93,10 @@ declare global {
 }
 
 function MainApp() {
+  const navigate = useNavigate();
+  const { company: urlCompany } = useParams<{ company: string }>();
+  const isPortfolioRoute = window.location.pathname === '/portfolio';
+
   const [startupName, setStartupName] = useState("");
   const [searchedStartup, setSearchedStartup] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -105,6 +110,22 @@ function MainApp() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const { signOut } = useAuthActions();
+
+  // Set searched startup from URL parameter on mount
+  useEffect(() => {
+    if (urlCompany && urlCompany !== searchedStartup) {
+      setSearchedStartup(decodeURIComponent(urlCompany));
+    }
+  }, [urlCompany]);
+
+  // Set portfolio view based on route
+  useEffect(() => {
+    if (isPortfolioRoute && !showPortfolio) {
+      setShowPortfolio(true);
+    } else if (!isPortfolioRoute && showPortfolio) {
+      setShowPortfolio(false);
+    }
+  }, [isPortfolioRoute]);
 
   // Expose debug setter to window for devtools access
   useEffect(() => {
@@ -244,6 +265,7 @@ function MainApp() {
     if (!startupName.trim()) return;
 
     setSearchedStartup(startupName);
+    navigate(`/company/${encodeURIComponent(startupName)}`);
     setIsAnalyzing(true);
     setErrorMessage(null);
 
@@ -352,9 +374,13 @@ function MainApp() {
         <PortfolioPage
           onSelectCompany={(companyName) => {
             setSearchedStartup(companyName);
+            navigate(`/company/${encodeURIComponent(companyName)}`);
             setShowPortfolio(false);
           }}
-          onBack={() => setShowPortfolio(false)}
+          onBack={() => {
+            setShowPortfolio(false);
+            navigate('/');
+          }}
         />
       </div>
     );
@@ -375,7 +401,10 @@ function MainApp() {
       }}>
         {/* Portfolio Tab Button */}
         <button
-          onClick={() => setShowPortfolio(true)}
+          onClick={() => {
+            setShowPortfolio(true);
+            navigate('/portfolio');
+          }}
           style={{
             background: "var(--color-card)",
             border: "1px solid var(--color-border)",
@@ -537,6 +566,7 @@ function MainApp() {
                     setStartupName(example);
                     setTimeout(() => {
                       setSearchedStartup(example);
+                      navigate(`/company/${encodeURIComponent(example)}`);
                       setIsAnalyzing(true);
                       analyzeStartup({ startupName: example, debug: debugMode })
                         .then(() => {
@@ -572,7 +602,10 @@ function MainApp() {
               zIndex: 100,
             }}>
               <button
-                onClick={() => setSearchedStartup(null)}
+                onClick={() => {
+                  setSearchedStartup(null);
+                  navigate('/');
+                }}
                 style={{
                   background: "var(--color-card)",
                   border: "1px solid var(--color-border)",
@@ -1532,5 +1565,15 @@ function MainApp() {
 export default function App() {
   const token = useAuthToken();
 
-  return token ? <MainApp /> : <AuthPage />;
+  if (!token) {
+    return <AuthPage />;
+  }
+
+  return (
+    <Routes>
+      <Route path="/" element={<MainApp />} />
+      <Route path="/portfolio" element={<MainApp />} />
+      <Route path="/company/:company" element={<MainApp />} />
+    </Routes>
+  );
 }
