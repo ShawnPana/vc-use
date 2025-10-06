@@ -17,6 +17,7 @@ import {
   BookmarkCheck,
   Expand,
   LogOut,
+  RefreshCw,
 } from "lucide-react";
 import AgentCard from "./components/AgentCard";
 import { BackgroundCircles } from "@/components/BackgroundCircles";
@@ -91,6 +92,7 @@ function MainApp() {
   const [startupName, setStartupName] = useState("");
   const [searchedStartup, setSearchedStartup] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isRerunning, setIsRerunning] = useState(false);
   const [showAddAgentModal, setShowAddAgentModal] = useState(false);
   const [showPortfolio, setShowPortfolio] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
@@ -113,6 +115,8 @@ function MainApp() {
   }, []);
 
   const analyzeStartup = useAction(api.actions.analyzeStartup);
+  const rerunAnalysis = useAction(api.actions.rerunAnalysis);
+  const enrichFounderInfo = useAction(api.actions.enrichFounderInfo);
   const initializeMyAgents = useMutation(api.mutations.initializeMyAgents);
   const addToPortfolioMutation = useMutation(api.mutations.addToPortfolio);
   const removeFromPortfolioMutation = useMutation(api.mutations.removeFromPortfolio);
@@ -235,6 +239,11 @@ function MainApp() {
 
     try {
       await analyzeStartup({ startupName, debug: debugMode });
+
+      // After initial analysis completes, trigger founder enrichment in background
+      enrichFounderInfo({ startupName }).catch((error) => {
+        console.error("Failed to enrich founder info:", error);
+      });
     } catch (error) {
       console.error("Analysis error:", error);
       let message = "Failed to analyze startup. Please try again.";
@@ -253,6 +262,33 @@ function MainApp() {
       setSearchedStartup(null);
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const handleRerun = async () => {
+    if (!searchedStartup) return;
+
+    setIsRerunning(true);
+    setErrorMessage(null);
+
+    try {
+      await rerunAnalysis({ startupName: searchedStartup });
+
+      // After rerun completes, trigger founder enrichment
+      enrichFounderInfo({ startupName: searchedStartup }).catch((error) => {
+        console.error("Failed to enrich founder info:", error);
+      });
+    } catch (error) {
+      console.error("Rerun error:", error);
+      let message = "Failed to refresh analysis. Please try again.";
+
+      if (error instanceof Error && !error.message.includes("Server Error") && !error.message.includes("Uncaught")) {
+        message = error.message;
+      }
+
+      setErrorMessage(message);
+    } finally {
+      setIsRerunning(false);
     }
   };
 
@@ -485,6 +521,12 @@ function MainApp() {
                       setSearchedStartup(example);
                       setIsAnalyzing(true);
                       analyzeStartup({ startupName: example, debug: debugMode })
+                        .then(() => {
+                          // Trigger founder enrichment after initial analysis
+                          enrichFounderInfo({ startupName: example }).catch((error) => {
+                            console.error("Failed to enrich founder info:", error);
+                          });
+                        })
                         .catch((error) => console.error("Analysis error:", error))
                         .finally(() => setIsAnalyzing(false));
                     }, 100);
@@ -499,39 +541,78 @@ function MainApp() {
 
         {searchedStartup && (
           <>
-            {/* Back Button - Top Left */}
-            <button
-              onClick={() => setSearchedStartup(null)}
-              style={{
-                position: "fixed",
-                top: "1rem",
-                left: "1rem",
-                background: "var(--color-card)",
-                border: "1px solid var(--color-border)",
-                borderRadius: "0.5rem",
-                padding: "0.625rem 1rem",
-                cursor: "pointer",
-                color: "var(--color-foreground)",
-                fontSize: "0.9rem",
-                fontWeight: 500,
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-                transition: "all 0.2s",
-                zIndex: 100,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "var(--color-foreground)";
-                e.currentTarget.style.color = "var(--color-background)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "var(--color-card)";
-                e.currentTarget.style.color = "var(--color-foreground)";
-              }}
-            >
-              <ArrowLeft size={16} />
-              Back
-            </button>
+            {/* Back & Rerun Buttons - Top Left */}
+            <div style={{
+              position: "fixed",
+              top: "1rem",
+              left: "1rem",
+              display: "flex",
+              gap: "0.75rem",
+              zIndex: 100,
+            }}>
+              <button
+                onClick={() => setSearchedStartup(null)}
+                style={{
+                  background: "var(--color-card)",
+                  border: "1px solid var(--color-border)",
+                  borderRadius: "0.5rem",
+                  padding: "0.625rem 1rem",
+                  cursor: "pointer",
+                  color: "var(--color-foreground)",
+                  fontSize: "0.9rem",
+                  fontWeight: 500,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  transition: "all 0.2s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "var(--color-foreground)";
+                  e.currentTarget.style.color = "var(--color-background)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "var(--color-card)";
+                  e.currentTarget.style.color = "var(--color-foreground)";
+                }}
+              >
+                <ArrowLeft size={16} />
+                Back
+              </button>
+
+              <button
+                onClick={() => void handleRerun()}
+                disabled={isRerunning}
+                style={{
+                  background: "var(--color-card)",
+                  border: "1px solid var(--color-border)",
+                  borderRadius: "0.5rem",
+                  padding: "0.625rem 1rem",
+                  cursor: isRerunning ? "not-allowed" : "pointer",
+                  color: "var(--color-foreground)",
+                  fontSize: "0.9rem",
+                  fontWeight: 500,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  transition: "all 0.2s",
+                  opacity: isRerunning ? 0.6 : 1,
+                }}
+                onMouseEnter={(e) => {
+                  if (!isRerunning) {
+                    e.currentTarget.style.background = "var(--color-foreground)";
+                    e.currentTarget.style.color = "var(--color-background)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "var(--color-card)";
+                  e.currentTarget.style.color = "var(--color-foreground)";
+                }}
+                title="Refresh analysis with latest data"
+              >
+                <RefreshCw size={16} className={isRerunning ? "animate-spin" : ""} />
+                {isRerunning ? "Refreshing..." : "Refresh"}
+              </button>
+            </div>
 
             <section className="dashboard" aria-live="polite">
             <article className="dashboard__tile dashboard__tile--headline">
