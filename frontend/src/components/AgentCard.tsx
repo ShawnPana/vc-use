@@ -1,7 +1,9 @@
 import clsx from "clsx";
 import { LucideIcon, Info } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AgentPromptModal } from "./AgentPromptModal";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface AgentCardProps {
   agentId: string;
@@ -14,6 +16,15 @@ interface AgentCardProps {
   prompt: string;
 }
 
+const loadingSteps = [
+  "Gathering data",
+  "Processing insights",
+  "Analyzing patterns",
+  "Reviewing sources",
+  "Cross-referencing data",
+  "Validating findings",
+];
+
 export default function AgentCard({
   agentId,
   name,
@@ -25,6 +36,18 @@ export default function AgentCard({
   prompt,
 }: AgentCardProps) {
   const [showModal, setShowModal] = useState(false);
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+
+  useEffect(() => {
+    if (status === "loading") {
+      const interval = setInterval(() => {
+        setCurrentStepIndex((prev) => (prev + 1) % loadingSteps.length);
+      }, 2000);
+      return () => clearInterval(interval);
+    } else {
+      setCurrentStepIndex(0);
+    }
+  }, [status]);
 
   return (
     <>
@@ -77,7 +100,7 @@ export default function AgentCard({
                   <span>.</span>
                   <span>.</span>
                 </span>
-                <span>Analyzing</span>
+                <span className="loading-step-text">{loadingSteps[currentStepIndex]}</span>
               </>
             )}
             {status === "completed" && <span>✓ Complete</span>}
@@ -95,10 +118,14 @@ export default function AgentCard({
           </div>
         )}
         {status === "completed" && (
-          <p className="agent-card__body">{analysis}</p>
+          <div className="agent-card__body agent-card__markdown">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{analysis}</ReactMarkdown>
+          </div>
         )}
         {status === "error" && (
-          <p className={clsx("agent-card__body", "agent-card__body--error")}>{analysis}</p>
+          <div className={clsx("agent-card__body", "agent-card__body--error")}>
+            {analysis}
+          </div>
         )}
       </div>
     </article>

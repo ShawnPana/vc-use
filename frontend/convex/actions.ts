@@ -19,6 +19,8 @@ export const scrapeStartupData = action({
       throw new Error("BACKEND_API_KEY not configured");
     }
 
+    console.log(`[scrapeStartupData] Starting full-analysis for: ${args.startupName}`);
+
     try {
       const response = await fetch(`${backendUrl}/api/full-analysis`, {
         method: "POST",
@@ -32,12 +34,16 @@ export const scrapeStartupData = action({
         }),
       });
 
+      console.log(`[scrapeStartupData] API response status: ${response.status}`);
+
       if (!response.ok) {
         const errorText = await response.text();
+        console.error(`[scrapeStartupData] API error: ${response.status} - ${errorText}`);
         throw new Error(`Backend API error: ${response.status} ${errorText}`);
       }
 
       const result = await response.json();
+      console.log(`[scrapeStartupData] API call successful, success: ${result.success}`);
 
       if (!result.success) {
         throw new Error(result.error || "Backend analysis failed");
@@ -73,14 +79,16 @@ export const scrapeStartupData = action({
       };
 
       // Store scraped data
+      console.log(`[scrapeStartupData] Storing scraped data for: ${args.startupName}`);
       await ctx.runMutation(api.mutations.storeScrapedData, {
         startupName: args.startupName,
         data: JSON.stringify(scrapedData),
       });
 
+      console.log(`[scrapeStartupData] Completed successfully for: ${args.startupName}`);
       return scrapedData;
     } catch (error) {
-      console.error("Error scraping startup data:", error);
+      console.error(`[scrapeStartupData] Error for ${args.startupName}:`, error);
       throw error;
     }
   },
@@ -96,6 +104,7 @@ export const analyzeWithCerebras = action({
     scrapedData: v.string(),
   },
   handler: async (ctx, args) => {
+    console.log(`[analyzeWithCerebras] Starting analysis for ${args.startupName} with agent: ${args.agentName}`);
 
     // Create analysis record with loading status
     const analysisId = await ctx.runMutation(api.mutations.createAnalysis, {
@@ -111,6 +120,7 @@ export const analyzeWithCerebras = action({
         throw new Error("CEREBRAS_API_KEY not configured");
       }
 
+      console.log(`[analyzeWithCerebras] Calling Cerebras API for ${args.agentName}`);
       const response = await fetch("https://api.cerebras.ai/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -122,7 +132,7 @@ export const analyzeWithCerebras = action({
           messages: [
             {
               role: "system",
-              content: args.agentPrompt,
+              content: `${args.agentPrompt}\n\nIMPORTANT: Format your entire response using Markdown with these requirements:\n- Use headers (##, ###), bold (**text**), italic (*text*), bullet points (- item), numbered lists (1. item)\n- Use ONLY ONE newline between sections, never multiple blank lines\n- Keep formatting compact and dense\n- Do NOT add any introductory or explanatory text - start directly with your analysis\n- Example format:\n##SECTION\nContent here.\n\n##NEXT SECTION\nMore content.`,
             },
             {
               role: "user",
@@ -134,13 +144,18 @@ export const analyzeWithCerebras = action({
         }),
       });
 
+      console.log(`[analyzeWithCerebras] Cerebras API response status: ${response.status} for ${args.agentName}`);
+
       if (!response.ok) {
         const errorText = await response.text();
+        console.error(`[analyzeWithCerebras] Cerebras API error for ${args.agentName}: ${response.status} - ${errorText}`);
         throw new Error(`Cerebras API error: ${response.status} ${errorText}`);
       }
 
       const data = await response.json();
       const analysis = data.choices[0]?.message?.content || "No analysis available";
+
+      console.log(`[analyzeWithCerebras] Analysis completed for ${args.agentName}, length: ${analysis.length} chars`);
 
       // Update analysis with result
       await ctx.runMutation(api.mutations.updateAnalysis, {
@@ -151,6 +166,7 @@ export const analyzeWithCerebras = action({
 
       return analysis;
     } catch (error) {
+      console.error(`[analyzeWithCerebras] Error for ${args.agentName}:`, error);
       // Update analysis with error
       await ctx.runMutation(api.mutations.updateAnalysis, {
         analysisId,
@@ -162,10 +178,162 @@ export const analyzeWithCerebras = action({
   },
 });
 
+// Action to run deep research (founders + competitors)
+export const runDeepResearch = action({
+  args: { startupName: v.string() },
+  handler: async (ctx, args) => {
+    console.log(`[runDeepResearch] Starting deep research for: ${args.startupName}`);
+    const backendUrl = process.env.BACKEND_API_URL || "http://localhost:8000";
+    const apiKey = process.env.BACKEND_API_KEY;
+
+    if (!apiKey) {
+      throw new Error("BACKEND_API_KEY not configured");
+    }
+
+    try {
+      // Get the current scraped data to extract founder names
+      const scrapedData = await ctx.runQuery(api.queries.getScrapedData, {
+        startupName: args.startupName,
+      });
+
+      if (!scrapedData?.data) {
+        throw new Error("No scraped data available. Please run initial analysis first.");
+      }
+
+      const parsedData = JSON.parse(scrapedData.data);
+      const founders = parsedData.founders || [];
+
+      console.log(`[runDeepResearch] Found ${founders.length} founders`);
+
+      if (founders.length === 0) {
+        throw new Error("No founders found. Cannot run deep research.");
+      }
+
+      // Check if deep research has already been run
+      const hasCompetitors = parsedData.competitors && parsedData.competitors.length > 0;
+      const foundersAlreadyEnriched = founders.every((f: any) => f.bio && f.bio !== "None");
+
+      if (hasCompetitors && foundersAlreadyEnriched) {
+        console.log("[runDeepResearch] Deep research already completed, skipping");
+        return { success: true, message: "Deep research already completed" };
+      }
+
+      console.log(`[runDeepResearch] Calling /api/deep-research endpoint`);
+      // Call backend deep-research endpoint
+      const response = await fetch(`${backendUrl}/api/deep-research`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": apiKey,
+        },
+        body: JSON.stringify({
+          company_name: args.startupName,
+          founders: {
+            founders: founders.map((f: any) => ({
+              name: f.name,
+              social_media: {
+                linkedin: f.linkedin || "None",
+                X: f.twitter || "None",
+                other: "None",
+              },
+              personal_website: f.personalWebsite || "None",
+              bio: f.bio || "None",
+            })),
+          },
+        }),
+      });
+
+      console.log(`[runDeepResearch] API response status: ${response.status}`);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[runDeepResearch] API error: ${response.status} - ${errorText}`);
+        throw new Error(`Backend API error: ${response.status} ${errorText}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        console.error(`[runDeepResearch] Backend returned success=false: ${result.error}`);
+        throw new Error(result.error || "Deep research failed");
+      }
+
+      console.log(`[runDeepResearch] Successfully received enriched data`);
+
+      // Update the scraped data with enriched founders and competitors
+      const enrichedFounders = result.founders.founders.map((f: any) => ({
+        name: f.name,
+        linkedin: f.social_media?.linkedin,
+        twitter: f.social_media?.X,
+        personalWebsite: f.personal_website,
+        bio: f.bio,
+      }));
+
+      const competitors = result.competitors.competitors.map((c: any) => ({
+        name: c.name,
+        website: c.website,
+        description: c.description,
+      }));
+
+      console.log(`[runDeepResearch] Enriched ${enrichedFounders.length} founders, found ${competitors.length} competitors`);
+
+      const updatedScrapedData = {
+        ...parsedData,
+        founders: enrichedFounders,
+        competitors: competitors,
+      };
+
+      // Store the updated scraped data
+      console.log(`[runDeepResearch] Storing updated scraped data`);
+      await ctx.runMutation(api.mutations.storeScrapedData, {
+        startupName: args.startupName,
+        data: JSON.stringify(updatedScrapedData),
+      });
+
+      const updatedScrapedDataString = JSON.stringify(updatedScrapedData);
+
+      // Get active agents to re-analyze with enriched data
+      const activeAgents = await ctx.runQuery(api.queries.getActiveAgents);
+      console.log(`[runDeepResearch] Re-analyzing with ${activeAgents.length} agents`);
+
+      // Re-run all agent analyses with the enriched data
+      for (const [index, agent] of activeAgents.entries()) {
+        try {
+          await ctx.runAction(api.actions.analyzeWithCerebras, {
+            startupName: args.startupName,
+            agentId: agent.agentId,
+            agentName: agent.name,
+            agentPrompt: agent.prompt,
+            scrapedData: updatedScrapedDataString,
+          });
+        } finally {
+          if (index < activeAgents.length - 1) {
+            await sleep(RATE_LIMIT_DELAY_MS);
+          }
+        }
+      }
+
+      // Regenerate summaries with enriched data
+      console.log(`[runDeepResearch] Regenerating summaries`);
+      await ctx.runAction(api.actions.generateSummaries, {
+        startupName: args.startupName,
+        scrapedData: updatedScrapedDataString,
+      });
+
+      console.log(`[runDeepResearch] Completed successfully for ${args.startupName}`);
+      return { success: true, enrichedFounders, competitors };
+    } catch (error) {
+      console.error(`[runDeepResearch] Error for ${args.startupName}:`, error);
+      throw error;
+    }
+  },
+});
+
 // Action to enrich founder information by calling the backend research_founders endpoint
 export const enrichFounderInfo = action({
   args: { startupName: v.string() },
   handler: async (ctx, args) => {
+    console.log(`[enrichFounderInfo] Starting founder enrichment for: ${args.startupName}`);
     const backendUrl = process.env.BACKEND_API_URL || "http://localhost:8000";
     const apiKey = process.env.BACKEND_API_KEY;
 
@@ -186,18 +354,21 @@ export const enrichFounderInfo = action({
       const parsedData = JSON.parse(scrapedData.data);
       const founders = parsedData.founders || [];
 
+      console.log(`[enrichFounderInfo] Found ${founders.length} founders`);
+
       if (founders.length === 0) {
-        console.log("No founders to enrich");
+        console.log("[enrichFounderInfo] No founders to enrich");
         return;
       }
 
       // Check if founders are already enriched (have bios)
       const foundersAlreadyEnriched = founders.every((f: any) => f.bio && f.bio !== "None");
       if (foundersAlreadyEnriched) {
-        console.log("Founders already enriched, skipping research");
+        console.log("[enrichFounderInfo] Founders already enriched, skipping research");
         return { success: true, enrichedFounders: founders };
       }
 
+      console.log(`[enrichFounderInfo] Calling /api/research-founders endpoint`);
       // Call backend to research founders
       const response = await fetch(`${backendUrl}/api/research-founders`, {
         method: "POST",
@@ -222,16 +393,22 @@ export const enrichFounderInfo = action({
         }),
       });
 
+      console.log(`[enrichFounderInfo] API response status: ${response.status}`);
+
       if (!response.ok) {
         const errorText = await response.text();
+        console.error(`[enrichFounderInfo] API error: ${response.status} - ${errorText}`);
         throw new Error(`Backend API error: ${response.status} ${errorText}`);
       }
 
       const result = await response.json();
 
       if (!result.success || !result.data) {
+        console.error(`[enrichFounderInfo] Backend returned success=false or no data`);
         throw new Error("Failed to enrich founder information");
       }
+
+      console.log(`[enrichFounderInfo] Successfully enriched founder data`);
 
       // Update the scraped data with enriched founder info
       const enrichedFounders = result.data.founders.map((f: any) => ({
@@ -242,12 +419,15 @@ export const enrichFounderInfo = action({
         bio: f.bio,
       }));
 
+      console.log(`[enrichFounderInfo] Enriched ${enrichedFounders.length} founders`);
+
       const updatedScrapedData = {
         ...parsedData,
         founders: enrichedFounders,
       };
 
       // Store the updated scraped data
+      console.log(`[enrichFounderInfo] Storing updated scraped data`);
       await ctx.runMutation(api.mutations.storeScrapedData, {
         startupName: args.startupName,
         data: JSON.stringify(updatedScrapedData),
@@ -257,6 +437,7 @@ export const enrichFounderInfo = action({
 
       // Get active agents to re-analyze with enriched data
       const activeAgents = await ctx.runQuery(api.queries.getActiveAgents);
+      console.log(`[enrichFounderInfo] Re-analyzing with ${activeAgents.length} agents`);
 
       // Re-run all agent analyses with the enriched founder data
       for (const [index, agent] of activeAgents.entries()) {
@@ -276,14 +457,17 @@ export const enrichFounderInfo = action({
       }
 
       // Regenerate summaries with enriched data
+      console.log(`[enrichFounderInfo] Regenerating summaries`);
+
       await ctx.runAction(api.actions.generateSummaries, {
         startupName: args.startupName,
         scrapedData: updatedScrapedDataString,
       });
 
+      console.log(`[enrichFounderInfo] Completed successfully for ${args.startupName}`);
       return { success: true, enrichedFounders };
     } catch (error) {
-      console.error("Error enriching founder info:", error);
+      console.error(`[enrichFounderInfo] Error for ${args.startupName}:`, error);
       throw error;
     }
   },
@@ -335,12 +519,64 @@ export const analyzeSingleAgent = action({
 export const rerunAnalysis = action({
   args: { startupName: v.string() },
   handler: async (ctx, args): Promise<{ success: boolean }> => {
-    // This is the same as analyzeStartup, but it's a separate action
-    // so the frontend can call it explicitly to force a refresh
-    await ctx.runAction(api.actions.analyzeStartup, {
+    console.log(`[rerunAnalysis] Starting rerun for: ${args.startupName}`);
+    const backendUrl = process.env.BACKEND_API_URL || "http://localhost:8000";
+    const apiKey = process.env.BACKEND_API_KEY;
+
+    if (!apiKey) {
+      throw new Error("BACKEND_API_KEY not configured");
+    }
+
+    // Always scrape fresh data for rerun
+    console.log(`[rerunAnalysis] Force re-scraping fresh data for ${args.startupName}`);
+    const scrapedData = await ctx.runAction(api.actions.scrapeStartupData, {
       startupName: args.startupName,
       debug: false,
     });
+    const scrapedDataString = JSON.stringify(scrapedData);
+
+    // Store the fresh scraped data
+    console.log(`[rerunAnalysis] Storing fresh scraped data`);
+    await ctx.runMutation(api.mutations.storeScrapedData, {
+      startupName: args.startupName,
+      data: scrapedDataString,
+    });
+
+    // Get active agents
+    let dbAgents = await ctx.runQuery(api.queries.getActiveAgents);
+
+    if (dbAgents.length === 0) {
+      console.log(`[rerunAnalysis] No agents found, initializing defaults`);
+      await ctx.runMutation(api.mutations.initializeMyAgents);
+      dbAgents = await ctx.runQuery(api.queries.getActiveAgents);
+    }
+
+    console.log(`[rerunAnalysis] Re-running analyses with ${dbAgents.length} agents`);
+    // Re-run all agent analyses with fresh data
+    for (const [index, agent] of dbAgents.entries()) {
+      try {
+        await ctx.runAction(api.actions.analyzeWithCerebras, {
+          startupName: args.startupName,
+          agentId: agent.agentId,
+          agentName: agent.name,
+          agentPrompt: agent.prompt,
+          scrapedData: scrapedDataString,
+        });
+      } finally {
+        if (index < dbAgents.length - 1) {
+          await sleep(RATE_LIMIT_DELAY_MS);
+        }
+      }
+    }
+
+    // Regenerate summaries with fresh data
+    console.log(`[rerunAnalysis] Regenerating summaries`);
+    await ctx.runAction(api.actions.generateSummaries, {
+      startupName: args.startupName,
+      scrapedData: scrapedDataString,
+    });
+
+    console.log(`[rerunAnalysis] Completed successfully for ${args.startupName}`);
     return { success: true };
   },
 });

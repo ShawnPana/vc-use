@@ -126,7 +126,8 @@ async def research_founders(company_name: str, founders: FounderList) -> dict:
     llm = ChatGoogle(model="gemini-flash-latest")
 
     browser = Browser(
-        use_cloud=True
+        use_cloud=True,
+        keep_alive=True
     )
 
     agent = Agent(
@@ -158,14 +159,21 @@ async def research_founders(company_name: str, founders: FounderList) -> dict:
 
 async def research_hype(company_name: str) -> tuple:
     task = f"""
-        - Use Google to research the hype around {company_name} by querying "{company_name} startup news"
-        - Scroll all the way to the bottom of the search results page to load all results
-        - Use the extract_structured_data action to get the first page of results
+        - Use Google to research the hype and funding information for {company_name}
+        - **Search Strategy - Execute these searches in order:**
+            1. First search: "{company_name} startup funding raised"
+            2. Second search: "{company_name} startup news"
+            3. Third search: "{company_name} valuation series"
+        - Scroll through the search results and read the summaries
         - **IMPORTANT**
             - Just use the google search results and the summaries under the links, do not click on any links
             - Create todos for each action you will take
+            - IGNORE social media follower counts (LinkedIn, Twitter, etc.) - these are NOT funding metrics
+            - Focus ONLY on actual funding raised, valuation, revenue, user counts, or growth statistics
         - Summarize your findings in a brief report and store it in "hype_summary"
-        - Extract any important metrics, funding numbers, user counts, or growth statistics if mentioned and store in "numbers"
+        - Extract ONLY actual funding amounts (e.g., "$5M Series A", "$10M raised", "100K users"), revenue, or valuation - store in "numbers"
+            - If you cannot find any real funding/revenue/user numbers, use "None"
+            - Do NOT include social media follower counts
         - List the most recent news items or announcements about the company and store in "recent_news"
         - Provide a structured JSON only (no extra text) in the following format:
         {{
