@@ -19,10 +19,19 @@ export const scrapeStartupData = action({
       throw new Error("BACKEND_API_KEY not configured");
     }
 
-    console.log(`[scrapeStartupData] Starting full-analysis for: ${args.startupName}`);
+    console.log(`[scrapeStartupData] Starting full-analysis for: ${args.startupName} (async mode)`);
+
+    // Get the Convex deployment URL for the callback
+    const convexSiteUrl = process.env.CONVEX_SITE_URL;
+    if (!convexSiteUrl) {
+      throw new Error("CONVEX_SITE_URL not configured");
+    }
+
+    const callbackUrl = `${convexSiteUrl}/full-analysis-callback`;
 
     try {
-      const response = await fetch(`${backendUrl}/api/full-analysis`, {
+      // Call backend with callback URL - don't await, let it process asynchronously
+      fetch(`${backendUrl}/api/full-analysis`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -31,62 +40,20 @@ export const scrapeStartupData = action({
         body: JSON.stringify({
           company_name: args.startupName,
           debug: args.debug || false,
+          callback_url: callbackUrl,
         }),
+      }).catch((error) => {
+        console.error(`[scrapeStartupData] Failed to trigger async full analysis:`, error);
       });
 
-      console.log(`[scrapeStartupData] API response status: ${response.status}`);
+      console.log(`[scrapeStartupData] Triggered async full analysis with callback to ${callbackUrl}`);
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[scrapeStartupData] API error: ${response.status} - ${errorText}`);
-        throw new Error(`Backend API error: ${response.status} ${errorText}`);
-      }
-
-      const result = await response.json();
-      console.log(`[scrapeStartupData] API call successful, success: ${result.success}`);
-
-      if (!result.success) {
-        throw new Error(result.error || "Backend analysis failed");
-      }
-
-      // Extract and format the data from backend
-      const companyData = result.company;
-
-      if (!companyData) {
-        throw new Error("Backend analysis returned no company data");
-      }
-      const hypeData = result.hype;
-
-      const scrapedData = {
-        startupName: args.startupName,
-        website: companyData.company_website,
-        bio: companyData.company_bio,
-        summary: companyData.company_summary,
-        founders: (companyData.founders_info?.founders || []).map((f: any) => ({
-          name: f.name,
-          linkedin: f.social_media?.linkedin,
-          twitter: f.social_media?.X,
-          personalWebsite: f.personal_website,
-          bio: f.bio,
-        })),
-        hype: hypeData
-          ? {
-              summary: hypeData.hype_summary,
-              numbers: hypeData.numbers,
-              recentNews: hypeData.recent_news,
-            }
-          : null,
+      // Return immediately - the backend will call us back when done
+      return {
+        success: true,
+        message: "Analysis started. Results will be available shortly.",
+        async: true
       };
-
-      // Store scraped data
-      console.log(`[scrapeStartupData] Storing scraped data for: ${args.startupName}`);
-      await ctx.runMutation(api.mutations.storeScrapedData, {
-        startupName: args.startupName,
-        data: JSON.stringify(scrapedData),
-      });
-
-      console.log(`[scrapeStartupData] Completed successfully for: ${args.startupName}`);
-      return scrapedData;
     } catch (error) {
       console.error(`[scrapeStartupData] Error for ${args.startupName}:`, error);
       throw error;
