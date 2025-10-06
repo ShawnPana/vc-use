@@ -18,6 +18,7 @@ import {
   Expand,
   LogOut,
   RefreshCw,
+  Swords,
 } from "lucide-react";
 import AgentCard from "./components/AgentCard";
 import { BackgroundCircles } from "@/components/BackgroundCircles";
@@ -93,6 +94,7 @@ function MainApp() {
   const [searchedStartup, setSearchedStartup] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isRerunning, setIsRerunning] = useState(false);
+  const [isDeepResearching, setIsDeepResearching] = useState(false);
   const [showAddAgentModal, setShowAddAgentModal] = useState(false);
   const [showPortfolio, setShowPortfolio] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
@@ -117,6 +119,7 @@ function MainApp() {
   const analyzeStartup = useAction(api.actions.analyzeStartup);
   const rerunAnalysis = useAction(api.actions.rerunAnalysis);
   const enrichFounderInfo = useAction(api.actions.enrichFounderInfo);
+  const runDeepResearch = useAction(api.actions.runDeepResearch);
   const initializeMyAgents = useMutation(api.mutations.initializeMyAgents);
   const addToPortfolioMutation = useMutation(api.mutations.addToPortfolio);
   const removeFromPortfolioMutation = useMutation(api.mutations.removeFromPortfolio);
@@ -185,6 +188,14 @@ function MainApp() {
   const hypeSummary = parsedScrapedData?.hype?.summary ?? "";
   const hypeRecentNews = parsedScrapedData?.hype?.recentNews ?? "";
   const isHypeLoading = searchedStartup ? scrapedData === undefined : false;
+
+  const competitors = parsedScrapedData?.competitors || [];
+  const hasCompetitors = competitors.length > 0;
+
+  // Show deep research button if analysis is done but deep research hasn't been run
+  const analysisComplete = !isAnalyzing && scrapedData && parsedScrapedData;
+  const deepResearchNotRun = !hasCompetitors || (parsedScrapedData?.founders && parsedScrapedData.founders.some((f: any) => !f.bio || f.bio === "None"));
+  const showDeepResearchButton = analysisComplete && deepResearchNotRun && !isDeepResearching;
   const recentNewsItems = useMemo(() => {
     if (!hypeRecentNews) {
       return [] as string[];
@@ -238,11 +249,15 @@ function MainApp() {
     setErrorMessage(null);
 
     try {
+      // Run initial analysis (company + hype)
       await analyzeStartup({ startupName, debug: debugMode });
 
-      // After initial analysis completes, trigger founder enrichment in background
-      enrichFounderInfo({ startupName }).catch((error) => {
-        console.error("Failed to enrich founder info:", error);
+      // After initial analysis completes, automatically run deep research (founders + competitors) in background
+      setIsDeepResearching(true);
+      runDeepResearch({ startupName }).catch((error) => {
+        console.error("Failed to run deep research:", error);
+      }).finally(() => {
+        setIsDeepResearching(false);
       });
     } catch (error) {
       console.error("Analysis error:", error);
@@ -272,11 +287,15 @@ function MainApp() {
     setErrorMessage(null);
 
     try {
+      // Always re-scrape and re-analyze
       await rerunAnalysis({ startupName: searchedStartup });
 
-      // After rerun completes, trigger founder enrichment
-      enrichFounderInfo({ startupName: searchedStartup }).catch((error) => {
-        console.error("Failed to enrich founder info:", error);
+      // Automatically run deep research after refresh
+      setIsDeepResearching(true);
+      runDeepResearch({ startupName: searchedStartup }).catch((error) => {
+        console.error("Failed to run deep research:", error);
+      }).finally(() => {
+        setIsDeepResearching(false);
       });
     } catch (error) {
       console.error("Rerun error:", error);
@@ -289,6 +308,28 @@ function MainApp() {
       setErrorMessage(message);
     } finally {
       setIsRerunning(false);
+    }
+  };
+
+  const handleDeepResearch = async () => {
+    if (!searchedStartup) return;
+
+    setIsDeepResearching(true);
+    setErrorMessage(null);
+
+    try {
+      await runDeepResearch({ startupName: searchedStartup });
+    } catch (error) {
+      console.error("Deep research error:", error);
+      let message = "Failed to run deep research. Please try again.";
+
+      if (error instanceof Error && !error.message.includes("Server Error") && !error.message.includes("Uncaught")) {
+        message = error.message;
+      }
+
+      setErrorMessage(message);
+    } finally {
+      setIsDeepResearching(false);
     }
   };
 
@@ -690,13 +731,10 @@ function MainApp() {
                 <div
                   className="dashboard__headline-subtitle"
                   style={{
-                    maxHeight: "4.5rem",
+                    flex: 1,
                     overflowY: "auto",
                     paddingRight: "0.5rem",
                     display: "block",
-                    WebkitLineClamp: "unset",
-                    WebkitBoxOrient: "unset",
-                    textOverflow: "clip",
                   }}
                 >
                   {getSummaryContent("company_overview") ||
@@ -790,12 +828,132 @@ function MainApp() {
               </div>
             </article>
 
+            {/* Competitive Landscape Tile - Full Width */}
+            <article className="dashboard__tile dashboard__tile--competitive">
+              <div className="dashboard__tile-header">
+                <span className="dashboard__tile-icon">
+                  <Swords />
+                </span>
+                <h3 className="dashboard__tile-title">Competitive Landscape</h3>
+                {hasCompetitors && (
+                  <button
+                    onClick={() => setExpandedTile("competitive")}
+                    style={{
+                      marginLeft: "auto",
+                      background: "transparent",
+                      border: "1px solid var(--color-border)",
+                      borderRadius: "0.5rem",
+                      padding: "0.4rem",
+                      cursor: "pointer",
+                      color: "var(--color-muted-foreground)",
+                      display: "flex",
+                      alignItems: "center",
+                      transition: "all 0.2s",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = "var(--color-muted)";
+                      e.currentTarget.style.color = "var(--color-foreground)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = "transparent";
+                      e.currentTarget.style.color = "var(--color-muted-foreground)";
+                    }}
+                    title="Expand"
+                  >
+                    <Expand size={16} />
+                  </button>
+                )}
+              </div>
+              <div className="dashboard__tile-body">
+                {isDeepResearching ? (
+                  <div style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "2rem",
+                    textAlign: "center",
+                    gap: "1rem"
+                  }}>
+                    <RefreshCw size={24} className="animate-spin" style={{ color: "var(--color-muted-foreground)" }} />
+                    <p style={{
+                      margin: 0,
+                      fontSize: "0.9rem",
+                      color: "var(--color-muted-foreground)"
+                    }}>
+                      Researching competitors and enriching founder profiles...
+                    </p>
+                  </div>
+                ) : hasCompetitors ? (
+                  <div style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+                    gap: "1rem",
+                    overflowY: "auto",
+                    flex: 1,
+                  }}>
+                    {competitors.map((competitor: any, index: number) => (
+                      <div
+                        key={index}
+                        style={{
+                          padding: "1rem",
+                          background: "var(--color-muted)",
+                          borderRadius: "0.5rem",
+                          border: "1px solid var(--color-border)",
+                          height: "fit-content",
+                        }}
+                      >
+                        <h4 style={{
+                          fontSize: "0.9rem",
+                          fontWeight: 600,
+                          marginBottom: "0.5rem",
+                          color: "var(--color-foreground)",
+                        }}>
+                          {competitor.name}
+                        </h4>
+                        {competitor.website && competitor.website !== "None" && (
+                          <a
+                            href={competitor.website}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              fontSize: "0.75rem",
+                              color: "var(--color-muted-foreground)",
+                              textDecoration: "none",
+                              display: "block",
+                              marginBottom: "0.5rem",
+                            }}
+                          >
+                            {competitor.website}
+                          </a>
+                        )}
+                        {competitor.description && competitor.description !== "None" && (
+                          <p style={{
+                            fontSize: "0.8rem",
+                            color: "var(--color-muted-foreground)",
+                            lineHeight: 1.5,
+                            margin: 0,
+                          }}>
+                            {competitor.description.length > 100
+                              ? competitor.description.substring(0, 100) + "..."
+                              : competitor.description}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="dashboard__placeholder">Researching competitive landscape...</p>
+                )}
+              </div>
+            </article>
+
             <article className="dashboard__tile dashboard__tile--funding">
               <div className="dashboard__tile-header">
                 <span className="dashboard__tile-icon">
                   <Globe />
                 </span>
-                <h3 className="dashboard__tile-title">News Pulse</h3>
+                <h3 className="dashboard__tile-title">News</h3>
                 <button
                   onClick={() => setExpandedTile("funding")}
                   style={{
@@ -902,7 +1060,7 @@ function MainApp() {
                                   justifyContent: "center",
                                   fontSize: "0.7rem",
                                   fontWeight: 600,
-                                  color: "white",
+                                  color: "var(--color-background)",
                                   flexShrink: 0,
                                 }}
                               >
@@ -952,7 +1110,7 @@ function MainApp() {
                 <span className="dashboard__tile-icon">
                   <TrendingUp />
                 </span>
-                <h3 className="dashboard__tile-title">Funding Progress</h3>
+                <h3 className="dashboard__tile-title">Traction Metrics</h3>
                 <button
                   onClick={() => setExpandedTile("metrics")}
                   style={{
@@ -1103,15 +1261,22 @@ function MainApp() {
               <p style={{ marginBottom: "1.5rem" }}>{getSummaryContent("founder_story")}</p>
               {parsedScrapedData?.founders && (
                 <div>
-                  <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Founder Profiles</h3>
+                  <h3 style={{ fontSize: "1.2rem", fontWeight: 600, marginBottom: "1.25rem", color: "var(--color-foreground)" }}>Founder Profiles</h3>
                   {parsedScrapedData.founders.map((founder: any, idx: number) => (
-                    <div key={idx} style={{ marginBottom: "1.5rem", paddingBottom: "1.5rem", borderBottom: idx < parsedScrapedData.founders.length - 1 ? "1px solid var(--color-border)" : "none" }}>
-                      <h4 style={{ fontWeight: 600, marginBottom: "0.5rem" }}>{founder.name}</h4>
-                      {founder.bio && <p style={{ marginBottom: "0.5rem" }}>{founder.bio}</p>}
+                    <div key={idx} style={{
+                      marginBottom: "2rem",
+                      paddingBottom: "2rem",
+                      borderBottom: idx < parsedScrapedData.founders.length - 1 ? "1px solid var(--color-border)" : "none",
+                      background: "var(--color-muted)",
+                      padding: "1.5rem",
+                      borderRadius: "0.75rem"
+                    }}>
+                      <h4 style={{ fontWeight: 600, marginBottom: "0.75rem", fontSize: "1.05rem", color: "var(--color-foreground)" }}>{founder.name}</h4>
+                      {founder.bio && <p style={{ marginBottom: "0.75rem", lineHeight: 1.6 }}>{founder.bio}</p>}
                       {(founder.linkedin || founder.twitter) && (
-                        <div style={{ display: "flex", gap: "1rem", marginTop: "0.5rem" }}>
-                          {founder.linkedin && <a href={founder.linkedin} target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-primary)" }}>LinkedIn</a>}
-                          {founder.twitter && <a href={founder.twitter} target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-primary)" }}>Twitter</a>}
+                        <div style={{ display: "flex", gap: "1rem", marginTop: "1rem" }}>
+                          {founder.linkedin && <a href={founder.linkedin} target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-primary)", textDecoration: "none", fontWeight: 500 }}>LinkedIn →</a>}
+                          {founder.twitter && <a href={founder.twitter} target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-primary)", textDecoration: "none", fontWeight: 500 }}>Twitter →</a>}
                         </div>
                       )}
                     </div>
@@ -1171,8 +1336,73 @@ function MainApp() {
           </div>
           {hypeSummary && (
             <div style={{ marginTop: "2rem" }}>
-              <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Hype Narrative</h3>
+              <h3 style={{ fontSize: "1.2rem", fontWeight: 600, marginBottom: "1.25rem", color: "var(--color-foreground)" }}>Hype Narrative</h3>
               <p style={{ fontSize: "0.95rem", lineHeight: 1.6 }}>{hypeSummary}</p>
+            </div>
+          )}
+        </div>
+      </ExpandedModal>
+
+      {/* Expanded Modal for Competitive Landscape */}
+      <ExpandedModal
+        isOpen={expandedTile === "competitive"}
+        onClose={() => setExpandedTile(null)}
+        title="Competitive Landscape"
+        icon={<Swords />}
+      >
+        <div>
+          {competitors.length === 0 ? (
+            <p style={{ fontSize: "0.95rem", color: "var(--color-muted-foreground)" }}>
+              No competitor data available yet. Run Deep Research to analyze the competitive landscape.
+            </p>
+          ) : (
+            <div style={{ display: "grid", gap: "1.5rem" }}>
+              {competitors.map((competitor: any, index: number) => (
+                <div
+                  key={index}
+                  style={{
+                    padding: "1.75rem",
+                    background: "var(--color-muted)",
+                    borderRadius: "0.75rem",
+                    border: "1px solid var(--color-border)",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
+                    <h3 style={{ fontSize: "1.2rem", fontWeight: 600, margin: 0, color: "var(--color-foreground)" }}>
+                      {competitor.name}
+                    </h3>
+                    {competitor.website && (
+                      <a
+                        href={competitor.website}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          padding: "0.35rem 0.75rem",
+                          background: "var(--color-muted)",
+                          border: "1px solid var(--color-border)",
+                          borderRadius: "0.375rem",
+                          fontSize: "0.8rem",
+                          color: "var(--color-foreground)",
+                          textDecoration: "none",
+                          transition: "all 0.2s",
+                        }}
+                      >
+                        Visit Site →
+                      </a>
+                    )}
+                  </div>
+                  {competitor.description && (
+                    <p style={{
+                      fontSize: "0.95rem",
+                      lineHeight: 1.6,
+                      color: "var(--color-muted-foreground)",
+                      margin: 0,
+                    }}>
+                      {competitor.description}
+                    </p>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -1182,7 +1412,7 @@ function MainApp() {
       <ExpandedModal
         isOpen={expandedTile === "funding"}
         onClose={() => setExpandedTile(null)}
-        title="News Pulse"
+        title="News"
         icon={<Globe />}
       >
         <div style={{ fontSize: "1rem", lineHeight: 1.8 }}>
@@ -1192,7 +1422,7 @@ function MainApp() {
             <>
               {hypeSummary && (
                 <div style={{ marginBottom: "1.75rem" }}>
-                  <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "0.75rem" }}>Hype Narrative</h3>
+                  <h3 style={{ fontSize: "1.2rem", fontWeight: 600, marginBottom: "1rem", color: "var(--color-foreground)" }}>Hype Narrative</h3>
                   <div
                     style={{
                       maxHeight: "260px",
@@ -1208,7 +1438,7 @@ function MainApp() {
 
               {recentNewsItems.length > 0 ? (
                 <div style={{ marginBottom: "1.75rem" }}>
-                  <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "0.75rem" }}>Latest Headlines</h3>
+                  <h3 style={{ fontSize: "1.2rem", fontWeight: 600, marginBottom: "1rem", color: "var(--color-foreground)" }}>Latest Headlines</h3>
                   <ul style={{ paddingLeft: "1.25rem", lineHeight: 1.7 }}>
                     {recentNewsItems.map((item: string, index: number) => (
                       <li key={`headline-${index}`}>{item}</li>
@@ -1223,14 +1453,14 @@ function MainApp() {
 
               <div style={{ display: "grid", gap: "1.75rem" }}>
                 <div>
-                  <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "0.75rem" }}>Funding Outlook</h3>
+                  <h3 style={{ fontSize: "1.2rem", fontWeight: 600, marginBottom: "1rem", color: "var(--color-foreground)" }}>Funding Outlook</h3>
                   <p style={{ fontSize: "0.95rem", lineHeight: 1.6 }}>
                     {getSummaryContent("funding_outlook") ||
                       "Funding outlook will appear here once the agents synthesize their view."}
                   </p>
                 </div>
                 <div>
-                  <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "0.75rem" }}>Market Position</h3>
+                  <h3 style={{ fontSize: "1.2rem", fontWeight: 600, marginBottom: "1rem", color: "var(--color-foreground)" }}>Market Position</h3>
                   <p style={{ fontSize: "0.95rem", lineHeight: 1.6 }}>
                     {getSummaryContent("market_position") ||
                       "Market positioning analysis will surface here after the run completes."}
@@ -1242,11 +1472,11 @@ function MainApp() {
         </div>
       </ExpandedModal>
 
-      {/* Expanded Modal for Funding Progress */}
+      {/* Expanded Modal for Traction Metrics */}
       <ExpandedModal
         isOpen={expandedTile === "metrics"}
         onClose={() => setExpandedTile(null)}
-        title="Funding Progress"
+        title="Traction Metrics"
         icon={<TrendingUp />}
       >
         <div>
@@ -1259,7 +1489,7 @@ function MainApp() {
           </div>
 
           <div style={{ marginTop: "2rem" }}>
-            <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Funding Metrics</h3>
+            <h3 style={{ fontSize: "1.2rem", fontWeight: 600, marginBottom: "1rem", color: "var(--color-foreground)" }}>Growth Timeline</h3>
             <div style={{ height: "260px", maxHeight: "320px" }}>
               <HypeMetricsChart metrics={hypeMetrics} />
             </div>
@@ -1267,7 +1497,7 @@ function MainApp() {
 
           {hypeSummary && (
             <div style={{ marginTop: "2rem" }}>
-              <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>Narrative</h3>
+              <h3 style={{ fontSize: "1.2rem", fontWeight: 600, marginBottom: "1rem", color: "var(--color-foreground)" }}>Market Narrative</h3>
               <p style={{ fontSize: "0.95rem", lineHeight: 1.6 }}>{hypeSummary}</p>
             </div>
           )}

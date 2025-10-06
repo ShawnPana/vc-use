@@ -20,7 +20,7 @@ export function LatestFundingStat({ latestMetric, metrics, isLoading = false }: 
           color: "var(--color-muted-foreground)",
         }}
       >
-        <span style={{ fontSize: "0.9rem" }}>Fetching latest funding data…</span>
+        <span style={{ fontSize: "0.9rem" }}>Gathering traction metrics…</span>
       </div>
     );
   }
@@ -38,7 +38,7 @@ export function LatestFundingStat({ latestMetric, metrics, isLoading = false }: 
         }}
       >
         <span style={{ fontSize: "0.95rem" }}>
-          Funding insights will appear here once hype research uncovers a round.
+          Traction metrics will appear here once research uncovers growth signals.
         </span>
       </div>
     );

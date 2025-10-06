@@ -204,8 +204,8 @@
   background-color: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: 1rem;
-  box-shadow: 0 30px 50px -40px rgba(15, 23, 42, 0.55);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+  box-shadow: 0 6px 12px -6px rgba(0, 0, 0, 0.15);
+  transition: border-color 0.2s ease, box-shadow 0.3s ease, background-color 0.2s ease, transform 0.3s ease;
 }
 
 .summary-card {
@@ -339,19 +339,128 @@
   color: #f87171;
 }
 
+.agent-card__markdown h1,
+.agent-card__markdown h2,
+.agent-card__markdown h3,
+.agent-card__markdown h4,
+.agent-card__markdown h5,
+.agent-card__markdown h6 {
+  color: var(--color-foreground);
+  margin: 0;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.agent-card__markdown h1 { font-size: 1.5rem; }
+.agent-card__markdown h2 { font-size: 1.3rem; }
+.agent-card__markdown h3 { font-size: 1.15rem; }
+.agent-card__markdown h4 { font-size: 1.05rem; }
+.agent-card__markdown h5 { font-size: 0.95rem; }
+.agent-card__markdown h6 { font-size: 0.9rem; }
+
+.agent-card__markdown p {
+  margin: 0;
+}
+
+.agent-card__markdown p:empty {
+  display: none;
+}
+
+.agent-card__markdown ul,
+.agent-card__markdown ol {
+  margin: 0;
+  padding-left: 1.5rem;
+}
+
+.agent-card__markdown li {
+  margin: 0;
+}
+
+.agent-card__markdown strong {
+  font-weight: 600;
+  color: var(--color-foreground);
+}
+
+.agent-card__markdown em {
+  font-style: italic;
+}
+
+.agent-card__markdown code {
+  background-color: var(--color-muted);
+  padding: 0.15rem 0.35rem;
+  border-radius: 0.25rem;
+  font-size: 0.9em;
+  font-family: monospace;
+}
+
+.agent-card__markdown pre {
+  background-color: var(--color-muted);
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  margin: 0.75rem 0;
+}
+
+.agent-card__markdown pre code {
+  background-color: transparent;
+  padding: 0;
+}
+
+.agent-card__markdown blockquote {
+  border-left: 3px solid var(--color-primary);
+  padding-left: 1rem;
+  margin: 0.75rem 0;
+  color: var(--color-muted-foreground);
+}
+
+.agent-card__markdown hr {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 1rem 0;
+}
+
+.agent-card__markdown a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.agent-card__markdown a:hover {
+  text-decoration: underline;
+}
+
+.agent-card__markdown table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.75rem 0;
+}
+
+.agent-card__markdown th,
+.agent-card__markdown td {
+  border: 1px solid var(--color-border);
+  padding: 0.5rem;
+  text-align: left;
+}
+
+.agent-card__markdown th {
+  background-color: var(--color-muted);
+  font-weight: 600;
+}
+
 .agent-card:hover,
 .summary-card:hover {
   border-color: var(--color-primary);
-  box-shadow: 0 35px 60px -35px rgba(15, 23, 42, 0.65);
+  box-shadow: 0 10px 20px -10px rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
 }
 
 .dashboard {
-  height: 100vh;
+  min-height: 100vh;
   padding: clamp(1.5rem, 4vw, 2.5rem);
   display: grid;
   grid-template-columns: 1.2fr 1fr 1.8fr;
-  grid-template-rows: repeat(3, minmax(0, 1fr));
+  grid-template-rows: auto auto auto auto;
   gap: clamp(0.75rem, 1.6vw, 1.25rem);
+  overflow-y: auto;
 }
 
 .dashboard__tile {
@@ -362,10 +471,16 @@
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
-  box-shadow: 0 24px 50px -40px rgba(15, 23, 42, 0.45);
+  box-shadow: 0 8px 16px -8px rgba(0, 0, 0, 0.15);
   overflow: hidden;
   min-height: 0;
   min-width: 0;
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+.dashboard__tile:hover {
+  box-shadow: 0 12px 24px -12px rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
 }
 
 .dashboard__tile--headline {
@@ -373,31 +488,43 @@
   grid-row: 1;
   justify-content: space-between;
   gap: clamp(1rem, 2vw, 1.35rem);
+  height: 300px;
 }
 
 .dashboard__tile--agents {
   grid-column: 3;
-  grid-row: 1 / span 3;
+  grid-row: 1 / span 4;
+  height: calc(300px + 280px + 260px + 320px + 3 * clamp(0.75rem, 1.6vw, 1.25rem));
 }
 
 .dashboard__tile--founder {
   grid-column: 1;
   grid-row: 2;
+  height: 280px;
 }
 
 .dashboard__tile--market {
   grid-column: 2;
   grid-row: 2;
+  height: 280px;
+}
+
+.dashboard__tile--competitive {
+  grid-column: 1 / span 2;
+  grid-row: 3;
+  height: 260px;
 }
 
 .dashboard__tile--funding {
   grid-column: 1;
-  grid-row: 3;
+  grid-row: 4;
+  height: 320px;
 }
 
 .dashboard__tile--metrics {
   grid-column: 2;
-  grid-row: 3;
+  grid-row: 4;
+  height: 320px;
 }
 
 .dashboard__tile-header {
@@ -442,6 +569,12 @@
   overflow-y: auto;
   padding-right: 0.25rem;
   min-height: 0;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.dashboard__tile-body--scroll::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
 }
 
 .dashboard__placeholder {
@@ -454,6 +587,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.7rem;
+  flex: 1;
   min-height: 0;
 }
 
@@ -468,12 +602,13 @@
   color: var(--color-muted-foreground);
   font-size: 1rem;
   line-height: 1.6;
-  max-width: 50ch;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.dashboard__headline-subtitle::-webkit-scrollbar {
+  display: none;
 }
 
 .dashboard__metrics-grid {
@@ -514,6 +649,12 @@
   overflow-y: auto;
   padding-right: 0.25rem;
   min-height: 0;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.dashboard__agents::-webkit-scrollbar {
+  display: none;
 }
 
 .dashboard__agents .agent-card {
@@ -610,14 +751,19 @@
     grid-row: 4;
   }
 
+  .dashboard__tile--competitive {
+    grid-column: 1 / span 2;
+    grid-row: 5;
+  }
+
   .dashboard__tile--funding {
     grid-column: 1;
-    grid-row: 5;
+    grid-row: 6;
   }
 
   .dashboard__tile--metrics {
     grid-column: 2;
-    grid-row: 6;
+    grid-row: 7;
   }
 }
 
@@ -632,6 +778,7 @@
   .dashboard__tile--agents,
   .dashboard__tile--founder,
   .dashboard__tile--market,
+  .dashboard__tile--competitive,
   .dashboard__tile--funding,
   .dashboard__tile--metrics {
     grid-column: 1;
@@ -710,6 +857,29 @@
   }
   20% {
     opacity: 1;
+  }
+}
+
+.loading-step-text {
+  animation: fadeInOut 2s ease-in-out infinite;
+}
+
+@keyframes fadeInOut {
+  0% {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  10% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  90% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(2px);
   }
 }
 

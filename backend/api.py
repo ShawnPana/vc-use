@@ -258,7 +258,7 @@ async def api_full_analysis(
     """
     Complete company analysis including company info and hype research.
     Runs analyze_company and research_hype in parallel.
-    Returns company data and hype info. Frontend should call /api/research-founders separately.
+    Returns company data and hype info. Frontend should call /api/deep-research separately for founders + competitors.
 
     Use debug=true to return mock data instantly for testing.
     """
