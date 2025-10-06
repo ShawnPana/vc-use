@@ -110,6 +110,7 @@ function MainApp() {
   const [debugMode, setDebugMode] = useState(false);
   const [expandedTile, setExpandedTile] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [hasShownSummary, setHasShownSummary] = useState(false);
 
   const { signOut } = useAuthActions();
 
@@ -383,6 +384,19 @@ function MainApp() {
   });
 
   const completedAgents = agentMeta.filter((agent) => agent.status === "completed").length;
+  const allAgentsCompleted = completedAgents === agentMeta.length && agentMeta.length > 0;
+
+  // Track if summary should be shown (once all agents complete, keep it visible)
+  useEffect(() => {
+    if (allAgentsCompleted && !hasShownSummary) {
+      setHasShownSummary(true);
+    }
+  }, [allAgentsCompleted, hasShownSummary]);
+
+  // Reset summary flag when switching companies
+  useEffect(() => {
+    setHasShownSummary(false);
+  }, [searchedStartup]);
 
   // Show portfolio page
   if (showPortfolio) {
@@ -842,16 +856,21 @@ function MainApp() {
                       ))}
                     </div>
                     {(() => {
+                      if (isEnrichingFounders) {
+                        return <p className="dashboard__placeholder" style={{ paddingTop: "0.25rem" }}>Founder stories are loading...</p>;
+                      }
+
                       const founderStory = getSummaryContent("founder_story");
+                      const storyLower = founderStory?.toLowerCase() || "";
                       const hasValidStory = founderStory &&
                                            founderStory !== '""' &&
                                            founderStory.trim() !== "" &&
                                            founderStory !== 'None' &&
-                                           !founderStory.toLowerCase().includes("unfortunately");
+                                           !storyLower.includes("unfortunately") &&
+                                           !storyLower.includes("although detailed biographies") &&
+                                           !storyLower.includes("not available");
 
-                      if (isEnrichingFounders && !hasValidStory) {
-                        return <p className="dashboard__placeholder" style={{ paddingTop: "0.25rem" }}>Researching founder backgrounds…</p>;
-                      } else if (hasValidStory) {
+                      if (hasValidStory) {
                         return <p style={{ fontSize: "0.95rem", lineHeight: 1.6, paddingTop: "0.25rem" }}>{founderStory}</p>;
                       }
                       return null;
@@ -1274,8 +1293,8 @@ function MainApp() {
                 </div>
               ) : (
                 <>
-                  {/* Show summary when all agents are completed */}
-                  {completedAgents === agentMeta.length && agentMeta.length > 0 && (
+                  {/* Show summary when all agents are completed (and keep it visible) */}
+                  {hasShownSummary && (
                     <AgentSummary
                       agents={agentMeta.map(agent => ({
                         agentId: agent.id,
@@ -1289,7 +1308,7 @@ function MainApp() {
                   )}
 
                   <p className="dashboard__agent-scroll-note">
-                    {completedAgents === agentMeta.length && agentMeta.length > 0
+                    {hasShownSummary
                       ? "Analysis complete. Review the executive summary above and detailed memos below."
                       : "Scroll to review detailed memos from each perspective."}
                   </p>
