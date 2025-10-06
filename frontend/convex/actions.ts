@@ -260,10 +260,14 @@ export const runDeepResearch = action({
         throw new Error(result.error || "Deep research failed");
       }
 
-      console.log(`[runDeepResearch] Successfully received enriched data`);
+      console.log(`[runDeepResearch] Successfully received enriched data`, JSON.stringify(result));
 
       // Update the scraped data with enriched founders and competitors
-      const enrichedFounders = result.founders.founders.map((f: any) => ({
+      // Backend returns flat arrays: result.founders and result.competitors
+      const foundersArray = result.founders?.founders || result.founders || [];
+      const competitorsArray = result.competitors?.competitors || result.competitors || [];
+
+      const enrichedFounders = foundersArray.map((f: any) => ({
         name: f.name,
         linkedin: f.social_media?.linkedin,
         twitter: f.social_media?.X,
@@ -271,13 +275,15 @@ export const runDeepResearch = action({
         bio: f.bio,
       }));
 
-      const competitors = result.competitors.competitors.map((c: any) => ({
+      const competitors = competitorsArray.map((c: any) => ({
         name: c.name,
         website: c.website,
         description: c.description,
       }));
 
       console.log(`[runDeepResearch] Enriched ${enrichedFounders.length} founders, found ${competitors.length} competitors`);
+      console.log(`[runDeepResearch] Enriched founders:`, JSON.stringify(enrichedFounders));
+      console.log(`[runDeepResearch] Competitors:`, JSON.stringify(competitors));
 
       const updatedScrapedData = {
         ...parsedData,
