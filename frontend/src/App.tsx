@@ -116,7 +116,7 @@ function MainApp() {
     if (urlCompany && urlCompany !== searchedStartup) {
       setSearchedStartup(decodeURIComponent(urlCompany));
     }
-  }, [urlCompany]);
+  }, [urlCompany, searchedStartup]);
 
   // Set portfolio view based on route
   useEffect(() => {
@@ -125,7 +125,7 @@ function MainApp() {
     } else if (!isPortfolioRoute && showPortfolio) {
       setShowPortfolio(false);
     }
-  }, [isPortfolioRoute]);
+  }, [isPortfolioRoute, showPortfolio]);
 
   // Expose debug setter to window for devtools access
   useEffect(() => {
@@ -265,7 +265,7 @@ function MainApp() {
     if (!startupName.trim()) return;
 
     setSearchedStartup(startupName);
-    navigate(`/company/${encodeURIComponent(startupName)}`);
+    void navigate(`/company/${encodeURIComponent(startupName)}`);
     setIsAnalyzing(true);
     setErrorMessage(null);
 
@@ -374,12 +374,12 @@ function MainApp() {
         <PortfolioPage
           onSelectCompany={(companyName) => {
             setSearchedStartup(companyName);
-            navigate(`/company/${encodeURIComponent(companyName)}`);
+            void navigate(`/company/${encodeURIComponent(companyName)}`);
             setShowPortfolio(false);
           }}
           onBack={() => {
             setShowPortfolio(false);
-            navigate('/');
+            void navigate('/');
           }}
         />
       </div>
@@ -403,7 +403,7 @@ function MainApp() {
         <button
           onClick={() => {
             setShowPortfolio(true);
-            navigate('/portfolio');
+            void navigate('/portfolio');
           }}
           style={{
             background: "var(--color-card)",
@@ -566,7 +566,7 @@ function MainApp() {
                     setStartupName(example);
                     setTimeout(() => {
                       setSearchedStartup(example);
-                      navigate(`/company/${encodeURIComponent(example)}`);
+                      void navigate(`/company/${encodeURIComponent(example)}`);
                       setIsAnalyzing(true);
                       analyzeStartup({ startupName: example, debug: debugMode })
                         .then(() => {
@@ -604,7 +604,7 @@ function MainApp() {
               <button
                 onClick={() => {
                   setSearchedStartup(null);
-                  navigate('/');
+                  void navigate('/');
                 }}
                 style={{
                   background: "var(--color-card)",
