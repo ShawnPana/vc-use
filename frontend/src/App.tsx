@@ -95,6 +95,7 @@ function MainApp() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isRerunning, setIsRerunning] = useState(false);
   const [isDeepResearching, setIsDeepResearching] = useState(false);
+  const [isEnrichingFounders, setIsEnrichingFounders] = useState(false);
   const [showAddAgentModal, setShowAddAgentModal] = useState(false);
   const [showPortfolio, setShowPortfolio] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
@@ -538,9 +539,12 @@ function MainApp() {
                       analyzeStartup({ startupName: example, debug: debugMode })
                         .then(() => {
                           // Trigger founder enrichment after initial analysis
-                          enrichFounderInfo({ startupName: example }).catch((error) => {
-                            console.error("Failed to enrich founder info:", error);
-                          });
+                          setIsEnrichingFounders(true);
+                          enrichFounderInfo({ startupName: example })
+                            .catch((error) => {
+                              console.error("Failed to enrich founder info:", error);
+                            })
+                            .finally(() => setIsEnrichingFounders(false));
                         })
                         .catch((error) => console.error("Analysis error:", error))
                         .finally(() => setIsAnalyzing(false));
@@ -752,10 +756,23 @@ function MainApp() {
                 </button>
               </div>
               <div className="dashboard__tile-body dashboard__tile-body--scroll">
-                {isSummariesLoading ? (
-                  <p className="dashboard__placeholder">Researching founding team backgrounds and achievements…</p>
-                ) : getSummaryContent("founder_story") ? (
-                  <p>{getSummaryContent("founder_story")}</p>
+                {parsedScrapedData?.founders && parsedScrapedData.founders.length > 0 ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                    {parsedScrapedData.founders.map((founder: any, idx: number) => (
+                      <div key={idx} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <span style={{ fontWeight: 500, fontSize: "0.95rem" }}>{founder.name}</span>
+                        {isEnrichingFounders && (!founder.bio || founder.bio === "None") && (
+                          <div className="loading-dots" style={{ display: "flex", gap: "0.15rem" }}>
+                            <span style={{ width: "4px", height: "4px", borderRadius: "50%", background: "var(--color-primary)", animation: "blink 1.4s infinite both" }}></span>
+                            <span style={{ width: "4px", height: "4px", borderRadius: "50%", background: "var(--color-primary)", animation: "blink 1.4s infinite both", animationDelay: "0.2s" }}></span>
+                            <span style={{ width: "4px", height: "4px", borderRadius: "50%", background: "var(--color-primary)", animation: "blink 1.4s infinite both", animationDelay: "0.4s" }}></span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : isEnrichingFounders || isSummariesLoading ? (
+                  <p className="dashboard__placeholder">Researching founding team…</p>
                 ) : (
                   <p className="dashboard__placeholder">No founder insights collected yet.</p>
                 )}
@@ -1228,37 +1245,46 @@ function MainApp() {
         icon={<Lightbulb />}
       >
         <div style={{ fontSize: "1rem", lineHeight: 1.8 }}>
-          {isSummariesLoading ? (
-            <p>Loading founder information...</p>
-          ) : getSummaryContent("founder_story") ? (
-            <>
-              <p style={{ marginBottom: "1.5rem" }}>{getSummaryContent("founder_story")}</p>
-              {parsedScrapedData?.founders && (
-                <div>
-                  <h3 style={{ fontSize: "1.2rem", fontWeight: 600, marginBottom: "1.25rem", color: "var(--color-foreground)" }}>Founder Profiles</h3>
-                  {parsedScrapedData.founders.map((founder: any, idx: number) => (
-                    <div key={idx} style={{
-                      marginBottom: "2rem",
-                      paddingBottom: "2rem",
-                      borderBottom: idx < parsedScrapedData.founders.length - 1 ? "1px solid var(--color-border)" : "none",
-                      background: "var(--color-muted)",
-                      padding: "1.5rem",
-                      borderRadius: "0.75rem"
-                    }}>
-                      <h4 style={{ fontWeight: 600, marginBottom: "0.75rem", fontSize: "1.05rem", color: "var(--color-foreground)" }}>{founder.name}</h4>
-                      {founder.bio && <p style={{ marginBottom: "0.75rem", lineHeight: 1.6 }}>{founder.bio}</p>}
-                      {(founder.linkedin || founder.twitter) && (
-                        <div style={{ display: "flex", gap: "1rem", marginTop: "1rem" }}>
-                          {founder.linkedin && <a href={founder.linkedin} target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-primary)", textDecoration: "none", fontWeight: 500 }}>LinkedIn →</a>}
-                          {founder.twitter && <a href={founder.twitter} target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-primary)", textDecoration: "none", fontWeight: 500 }}>Twitter →</a>}
-                        </div>
-                      )}
+          {getSummaryContent("founder_story") && !getSummaryContent("founder_story").toLowerCase().includes("unfortunately") && (
+            <p style={{ marginBottom: "1.5rem" }}>{getSummaryContent("founder_story")}</p>
+          )}
+          {parsedScrapedData?.founders && parsedScrapedData.founders.length > 0 ? (
+            <div>
+              <h3 style={{ fontSize: "1.2rem", fontWeight: 600, marginBottom: "1.25rem", color: "var(--color-foreground)" }}>Founder Profiles</h3>
+              {parsedScrapedData.founders.map((founder: any, idx: number) => (
+                <div key={idx} style={{
+                  marginBottom: "2rem",
+                  paddingBottom: "2rem",
+                  borderBottom: idx < parsedScrapedData.founders.length - 1 ? "1px solid var(--color-border)" : "none",
+                  background: "var(--color-muted)",
+                  padding: "1.5rem",
+                  borderRadius: "0.75rem"
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.75rem" }}>
+                    <h4 style={{ fontWeight: 600, fontSize: "1.05rem", color: "var(--color-foreground)", margin: 0 }}>{founder.name}</h4>
+                    {isEnrichingFounders && (!founder.bio || founder.bio === "None") && (
+                      <div className="loading-dots" style={{ display: "flex", gap: "0.2rem" }}>
+                        <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "var(--color-primary)", animation: "blink 1.4s infinite both" }}></span>
+                        <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "var(--color-primary)", animation: "blink 1.4s infinite both", animationDelay: "0.2s" }}></span>
+                        <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "var(--color-primary)", animation: "blink 1.4s infinite both", animationDelay: "0.4s" }}></span>
+                      </div>
+                    )}
+                  </div>
+                  {isEnrichingFounders && (!founder.bio || founder.bio === "None") ? (
+                    <p style={{ color: "var(--color-muted-foreground)", fontSize: "0.9rem", fontStyle: "italic" }}>Researching background...</p>
+                  ) : founder.bio && founder.bio !== "None" ? (
+                    <p style={{ marginBottom: "0.75rem", lineHeight: 1.6 }}>{founder.bio}</p>
+                  ) : null}
+                  {(founder.linkedin || founder.twitter) && (
+                    <div style={{ display: "flex", gap: "1rem", marginTop: "1rem" }}>
+                      {founder.linkedin && <a href={founder.linkedin} target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-primary)", textDecoration: "none", fontWeight: 500 }}>LinkedIn →</a>}
+                      {founder.twitter && <a href={founder.twitter} target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-primary)", textDecoration: "none", fontWeight: 500 }}>Twitter →</a>}
                     </div>
-                  ))}
+                  )}
                 </div>
-              )}
-            </>
-          ) : isSummariesLoading ? (
+              ))}
+            </div>
+          ) : isEnrichingFounders || isSummariesLoading ? (
             <p>Diving deep into founder backgrounds, experience, and credentials…</p>
           ) : (
             <p>No founder information available yet.</p>

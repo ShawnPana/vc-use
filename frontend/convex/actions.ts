@@ -406,8 +406,9 @@ export const enrichFounderInfo = action({
       const result = await response.json();
 
       if (!result.success || !result.data) {
-        console.error(`[enrichFounderInfo] Backend returned success=false or no data`);
-        throw new Error("Failed to enrich founder information");
+        console.error(`[enrichFounderInfo] Backend returned success=false or no data:`, result);
+        console.log(`[enrichFounderInfo] Skipping founder enrichment - will use basic founder info`);
+        return { success: false, message: "Founder enrichment unavailable" };
       }
 
       console.log(`[enrichFounderInfo] Successfully enriched founder data`);
@@ -596,11 +597,16 @@ export const analyzeStartup = action({
       } else {
         // No cached data, scrape fresh data
         console.log(`Scraping fresh data for ${args.startupName}`);
-        const scrapedData = await ctx.runAction(api.actions.scrapeStartupData, {
-          startupName: args.startupName,
-          debug: args.debug,
-        });
-        scrapedDataString = JSON.stringify(scrapedData);
+        try {
+          const scrapedData = await ctx.runAction(api.actions.scrapeStartupData, {
+            startupName: args.startupName,
+            debug: args.debug,
+          });
+          scrapedDataString = JSON.stringify(scrapedData);
+        } catch (scrapeError) {
+          console.error("Failed to scrape startup data:", scrapeError);
+          throw new Error(`Failed to scrape data for ${args.startupName}. Make sure the backend API is running. Error: ${scrapeError instanceof Error ? scrapeError.message : String(scrapeError)}`);
+        }
       }
 
     // Get active agents from database
@@ -677,7 +683,7 @@ export const generateSummaries = action({
     const summaryTypes = [
       ...(hasFounderInfo ? [{
         type: "founder_story",
-        prompt: `Based on the following founder information, create a brief, compelling summary of the founders' background and how they came together to start this company. Focus on their unique experiences and complementary skills. 2-3 sentences max.\n\nFounder Information:\n${founderBios}`,
+        prompt: `Based on the following founder information, create a brief, compelling summary of the founders' background and how they came together to start this company. Focus on their unique experiences and complementary skills. 2-3 sentences max.\n\nIMPORTANT: If the founder information is incomplete or just contains names without bios, DO NOT generate a summary. Return an empty string instead. Only create a summary if there is actual biographical information about the founders.\n\nFounder Information:\n${founderBios}`,
         useDirectData: true,
       }] : []),
       {
