@@ -200,7 +200,7 @@ export const analyzeWithCerebras = action({
             },
             {
               role: "user",
-              content: `Analyze this startup based on the following detailed data gathered from web research:\n\n${args.scrapedData}\n\nProvide a detailed, insightful analysis in 3-5 paragraphs focusing on your specific perspective.`,
+              content: `Here is the startup data gathered from web research:\n\n${args.scrapedData}`,
             },
           ],
           temperature: 0.7,
