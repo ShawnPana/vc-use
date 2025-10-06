@@ -204,7 +204,7 @@ async def research_hype(company_name: str) -> tuple:
         print('No result')
         raise Exception("Failed to research hype")
 
-async def find_competitors(company_name: str) -> tuple:
+async def research_competitors(company_name: str) -> tuple:
     task = f"""
         - Use Google to find competitors of {company_name} by querying "{company_name} competitors"
         - Look through the search results and identify the top 5 main competitors

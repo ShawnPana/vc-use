@@ -10,8 +10,8 @@ import tracemalloc
 import psutil
 from dotenv import load_dotenv
 
-from scrapers.analyze_company import analyze_company, research_founders, research_hype
-from scrapers.models import Company, FounderList, Founder, SocialMedia, Hype
+from scrapers.analyze_company import analyze_company, research_founders, research_hype, research_competitors
+from scrapers.models import Company, FounderList, Founder, SocialMedia, Hype, CompetitorList
 
 load_dotenv()
 
@@ -82,6 +82,20 @@ class FounderResearchResponse(BaseModel):
 class HypeResearchResponse(BaseModel):
     success: bool
     data: Optional[Hype] = None
+    error: Optional[str] = None
+
+class DeepResearchResponse(BaseModel):
+    success: bool
+    founders: Optional[FounderList] = None
+    competitors: Optional[CompetitorList] = None
+    error: Optional[str] = None
+
+class CompetitorResearchRequest(BaseModel):
+    company_name: str
+
+class CompetitorResearchResponse(BaseModel):
+    success: bool
+    data: Optional[CompetitorList] = None
     error: Optional[str] = None
 
 # Health check endpoint
@@ -210,6 +224,31 @@ async def api_research_founders(
             error=str(e)
         )
 
+# Competitor research endpoint
+@app.post("/api/research-competitor", response_model=CompetitorResearchResponse)
+async def api_research_competitor(
+    request: CompetitorResearchRequest,
+    api_key: str = Security(verify_api_key)
+):
+    """
+    Research competitors to gather:
+    - Competitor names
+    - Competitor websites
+    - Brief descriptions
+    """
+    try:
+        competitors, browser = await research_competitors(request.company_name)
+        await browser.stop()
+        return CompetitorResearchResponse(
+            success=True,
+            data=competitors
+        )
+    except Exception as e:
+        return CompetitorResearchResponse(
+            success=False,
+            error=str(e)
+        )
+
 # Full company analysis (company + hype in parallel)
 @app.post("/api/full-analysis", response_model=FullAnalysisResponse)
 async def api_full_analysis(
@@ -273,6 +312,40 @@ async def api_full_analysis(
             error=str(e)
         )
 
+# Deep research endpoint (founders + competitors in parallel)
+@app.post("/api/deep-research", response_model=DeepResearchResponse)
+async def api_deep_research(
+    request: FounderResearchRequest,
+    api_key: str = Security(verify_api_key)
+):
+    """
+    Deep research on company founders and competitors.
+    Runs research_founders and research_competitors in parallel.
+    Returns detailed founder info and competitor list.
+    """
+    try:
+        # Run research_founders and research_competitors in parallel
+        results = await asyncio.gather(
+            research_founders(request.company_name, request.founders),
+            research_competitors(request.company_name)
+        )
+
+        (founders, browser1), (competitors, browser2) = results
+
+        # Stop both browsers after both complete
+        await browser1.stop()
+        await browser2.stop()
+
+        return DeepResearchResponse(
+            success=True,
+            founders=founders,
+            competitors=competitors
+        )
+    except Exception as e:
+        return DeepResearchResponse(
+            success=False,
+            error=str(e)
+        )
 
 if __name__ == "__main__":
     import uvicorn
