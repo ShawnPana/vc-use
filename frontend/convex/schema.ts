@@ -6,7 +6,7 @@ export default defineSchema({
   ...authTables,
 
   analyses: defineTable({
-    userId: v.string(),
+    userId: v.id("users"),
     startupName: v.string(),
     agentId: v.string(),
     agentName: v.string(),
@@ -18,7 +18,7 @@ export default defineSchema({
     .index("by_user_startup_and_agent", ["userId", "startupName", "agentId"]),
 
   summaries: defineTable({
-    userId: v.string(),
+    userId: v.id("users"),
     startupName: v.string(),
     summaryType: v.string(),
     content: v.string(),
@@ -26,14 +26,14 @@ export default defineSchema({
   }).index("by_user_and_startup", ["userId", "startupName"]),
 
   scrapedData: defineTable({
-    userId: v.string(),
+    userId: v.id("users"),
     startupName: v.string(),
     data: v.string(),
     timestamp: v.number(),
   }).index("by_user_and_startup", ["userId", "startupName"]),
 
   agents: defineTable({
-    userId: v.string(),
+    userId: v.id("users"),
     agentId: v.string(),
     name: v.string(),
     prompt: v.string(),
@@ -46,7 +46,7 @@ export default defineSchema({
     .index("by_user_and_agent_id", ["userId", "agentId"]),
 
   portfolio: defineTable({
-    userId: v.string(),
+    userId: v.id("users"),
     startupName: v.string(),
     addedAt: v.number(),
     website: v.optional(v.string()),
