@@ -683,7 +683,7 @@ export const generateSummaries = action({
     const summaryTypes = [
       ...(hasFounderInfo ? [{
         type: "founder_story",
-        prompt: `Based on the following founder information, create a brief, compelling summary of the founders' background and how they came together to start this company. Focus on their unique experiences and complementary skills. 2-3 sentences max.\n\nIMPORTANT: Always create a summary even if biographical information is limited. If you truly cannot create any summary, respond with exactly the word "None" and nothing else. Do NOT return empty strings or quotes.\n\nFounder Information:\n${founderBios}`,
+        prompt: `Based on the following founder information, create a brief, compelling summary of the founders' background and how they came together to start this company. Focus on their unique experiences and complementary skills. 2-3 sentences max.\n\nIMPORTANT: Always create a positive, insightful summary even if biographical information is limited - focus on the team and their potential. If you truly cannot create any summary at all, respond with exactly the word "None" and nothing else. Do NOT return empty strings, quotes, or apologetic messages like "detailed biographies are not available" or "unfortunately". Be confident and forward-looking.\n\nFounder Information:\n${founderBios}`,
         useDirectData: true,
       }] : []),
       {
@@ -734,9 +734,17 @@ export const generateSummaries = action({
           const data = await response.json();
           let content = data.choices[0]?.message?.content || "";
 
-          // Clean up content - if it's empty, just quotes, or whitespace, set to "None"
+          // Clean up content - if it's empty, just quotes, whitespace, or apologetic, set to "None"
           content = content.trim();
-          if (content === "" || content === '""' || content === "''") {
+          const contentLower = content.toLowerCase();
+          if (
+            content === "" ||
+            content === '""' ||
+            content === "''" ||
+            contentLower.includes("although detailed biographies") ||
+            contentLower.includes("unfortunately") ||
+            (contentLower.includes("not available") && contentLower.includes("biograph"))
+          ) {
             content = "None";
           }
 
