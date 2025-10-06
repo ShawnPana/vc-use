@@ -21,12 +21,8 @@ export const scrapeStartupData = action({
 
     console.log(`[scrapeStartupData] Starting full-analysis for: ${args.startupName} (async mode)`);
 
-    // Get the Convex deployment URL for the callback
+    // CONVEX_SITE_URL is a built-in environment variable
     const convexSiteUrl = process.env.CONVEX_SITE_URL;
-    if (!convexSiteUrl) {
-      throw new Error("CONVEX_SITE_URL not configured");
-    }
-
     const callbackUrl = `${convexSiteUrl}/full-analysis-callback`;
 
     try {
@@ -187,12 +183,8 @@ export const runDeepResearch = action({
 
       console.log(`[runDeepResearch] Calling /api/deep-research endpoint (async mode)`);
 
-      // Get the Convex deployment URL for the callback
+      // CONVEX_SITE_URL is a built-in environment variable
       const convexSiteUrl = process.env.CONVEX_SITE_URL;
-      if (!convexSiteUrl) {
-        throw new Error("CONVEX_SITE_URL not configured");
-      }
-
       const callbackUrl = `${convexSiteUrl}/deep-research-callback`;
 
       // Call backend deep-research endpoint with callback URL
@@ -492,71 +484,21 @@ export const analyzeStartup = action({
   args: { startupName: v.string(), debug: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
     try {
-      // Check if we already have scraped data cached
-      const cachedData = await ctx.runQuery(api.queries.getScrapedData, {
-        startupName: args.startupName,
-      });
-
-      let scrapedDataString: string;
-
-      if (cachedData?.data) {
-        // Use cached data instead of re-scraping
-        console.log(`Using cached data for ${args.startupName}`);
-        scrapedDataString = cachedData.data;
-      } else {
-        // No cached data, scrape fresh data
-        console.log(`Scraping fresh data for ${args.startupName}`);
-        try {
-          const scrapedData = await ctx.runAction(api.actions.scrapeStartupData, {
-            startupName: args.startupName,
-            debug: args.debug,
-          });
-          scrapedDataString = JSON.stringify(scrapedData);
-        } catch (scrapeError) {
-          console.error("Failed to scrape startup data:", scrapeError);
-          throw new Error(`Failed to scrape data for ${args.startupName}. Make sure the backend API is running. Error: ${scrapeError instanceof Error ? scrapeError.message : String(scrapeError)}`);
-        }
+      // Initialize agents if they don't exist
+      const dbAgents = await ctx.runQuery(api.queries.getActiveAgents);
+      if (dbAgents.length === 0) {
+        await ctx.runMutation(api.mutations.initializeMyAgents);
       }
 
-    // Get active agents from database
-    let dbAgents = await ctx.runQuery(api.queries.getActiveAgents);
-
-    // If no agents in DB, seed with default agents
-    if (dbAgents.length === 0) {
-      await ctx.runMutation(api.mutations.initializeMyAgents);
-      // Re-fetch agents
-      dbAgents = await ctx.runQuery(api.queries.getActiveAgents);
-    }
-
-    const activeAgents = dbAgents;
-
-    // Run agents sequentially to avoid hitting Cerebras rate limits
-    for (const [index, agent] of activeAgents.entries()) {
-      try {
-        await ctx.runAction(api.actions.analyzeWithCerebras, {
-          startupName: args.startupName,
-          agentId: agent.agentId,
-          agentName: agent.name,
-          agentPrompt: agent.prompt,
-          scrapedData: scrapedDataString,
-        });
-      } finally {
-        if (index < activeAgents.length - 1) {
-          await sleep(RATE_LIMIT_DELAY_MS);
-        }
-      }
-    }
-
-      // Generate summaries
-      await ctx.runAction(api.actions.generateSummaries, {
+      // Trigger async scraping - the webhook will handle agent analyses when data arrives
+      await ctx.runAction(api.actions.scrapeStartupData, {
         startupName: args.startupName,
-        scrapedData: scrapedDataString,
+        debug: args.debug,
       });
 
-      return { success: true };
+      return { success: true, async: true };
     } catch (error) {
       console.error("Error in analyzeStartup:", error);
-      // Re-throw with a more helpful message if it's an auth error
       if (error instanceof Error && error.message.includes("must be authenticated")) {
         throw new Error("You must be signed in to analyze startups.");
       }
