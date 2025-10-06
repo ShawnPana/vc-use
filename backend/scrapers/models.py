@@ -62,6 +62,28 @@ class Hype(PrettyBaseModel):
     def __str__(self) -> str:
         return f"Hype Summary: {self.hype_summary}"
 
+class Competitor(PrettyBaseModel):
+    name: str
+    website: Optional[str] = None
+    description: Optional[str] = None
+
+    def __str__(self) -> str:
+        return (
+            f"Name: {self.name}\n"
+            f"Website: {self.website or 'N/A'}\n"
+            f"Description: {self.description or 'N/A'}"
+        )
+
+class CompetitorList(PrettyBaseModel):
+    competitors: List[Competitor]
+
+    def __iter__(self) -> Iterator[Competitor]:
+        return iter(self.competitors)
+    def __len__(self) -> int:
+        return len(self.competitors)
+    def __getitem__(self, index) -> Competitor:
+        return self.competitors[index]
+
 # Example
 if __name__ == "__main__":
     sm = SocialMedia(linkedin="https://linkedin.com/in/example", X="@example")

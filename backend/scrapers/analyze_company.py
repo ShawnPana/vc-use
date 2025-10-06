@@ -7,7 +7,7 @@ from browser_use import Agent, Browser, ChatGoogle, Tools
 from browser_use_sdk import BrowserUse
 
 # from models import Company, Founder, FounderList, SocialMedia, Hype  # your Pydantic models from models.py
-from .models import Company, Founder, FounderList, SocialMedia, Hype  # your Pydantic models from models.py
+from .models import Company, Founder, FounderList, CompetitorList, Competitor, SocialMedia, Hype  # your Pydantic models from models.py
 
 load_dotenv()
 
@@ -204,6 +204,60 @@ async def research_hype(company_name: str) -> tuple:
     else:
         print('No result')
         raise Exception("Failed to research hype")
+
+async def find_competitors(company_name: str) -> tuple:
+    task = f"""
+        - Use Google to find competitors of {company_name} by querying "{company_name} competitors"
+        - Look through the search results and identify the top 5 main competitors
+        - **IMPORTANT**
+            - Just use the google search results and the summaries under the links, do not click on any links
+            - Create todos for each action you will take
+        - For each competitor, extract:
+            - The company name
+            - Their website URL if available
+            - A brief description of what they do
+        - Return ONLY a JSON object where each item matches this schema exactly:
+        {{
+            "competitors": [
+                {{
+                    "name": string,
+                    "website": string (or "None"),
+                    "description": string (or "None")
+                }}
+            ]
+        }}
+    """
+
+    tools = Tools()
+    llm = ChatGoogle(model="gemini-flash-latest")
+
+    browser = Browser(use_cloud=True, keep_alive=True)
+
+    agent = Agent(
+        task=task,
+        llm=llm,
+        browser=browser,
+        tools=tools,
+        available_file_paths=[],
+        output_model_schema=CompetitorList,
+        channel='chrome'
+    )
+
+    history = await agent.run()
+
+    result = history.final_result()
+    if result:
+        parsed: CompetitorList = CompetitorList.model_validate_json(result)
+        print('\n--------------------------------')
+        for competitor in parsed:
+            print(f'Competitor: {competitor.name}')
+            print(f'Website: {competitor.website}')
+            print(f'Description: {competitor.description}')
+            print('--------------------------------')
+        return parsed, browser
+    else:
+        print('No result')
+        raise Exception("Failed to find competitors")
 
 async def main():
     # company_name = "ThirdLayer"
