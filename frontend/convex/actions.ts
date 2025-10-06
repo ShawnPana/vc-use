@@ -132,7 +132,7 @@ export const analyzeWithCerebras = action({
           messages: [
             {
               role: "system",
-              content: `${args.agentPrompt}\n\nIMPORTANT: Format your entire response using Markdown with these requirements:\n- Use headers (##, ###), bold (**text**), italic (*text*), bullet points (- item), numbered lists (1. item)\n- Use ONLY ONE newline between sections, never multiple blank lines\n- Keep formatting compact and dense\n- Do NOT add any introductory or explanatory text - start directly with your analysis\n- Example format:\n##SECTION\nContent here.\n\n##NEXT SECTION\nMore content.`,
+              content: `${args.agentPrompt}\n\nIMPORTANT: DO NOT confuse this company with another company. This company should in no case be referred to as another company - it is its own distinct company with this specific name.\n\nIMPORTANT: Format your entire response using Markdown with these requirements:\n- Use headers (##, ###), bold (**text**), italic (*text*), bullet points (- item), numbered lists (1. item)\n- Use ONLY ONE newline between sections, never multiple blank lines\n- Keep formatting compact and dense\n- Do NOT add any introductory or explanatory text - start directly with your analysis\n- Example format:\n##SECTION\nContent here.\n\n##NEXT SECTION\nMore content.`,
             },
             {
               role: "user",
@@ -716,7 +716,7 @@ export const generateSummaries = action({
             messages: [
               {
                 role: "system",
-                content: summary.prompt,
+                content: `${summary.prompt}\n\nIMPORTANT: DO NOT confuse this company with another company. This company should in no case be referred to as another company - it is its own distinct company with this specific name.`,
               },
               {
                 role: "user",
