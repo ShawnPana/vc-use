@@ -1,15 +1,12 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
 export const getAnalyses = query({
   args: { startupName: v.string() },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      return [];
-    }
-    const userId = identity.subject;
-    if (!userId) {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) {
       return [];
     }
 
@@ -24,12 +21,8 @@ export const getAnalyses = query({
 export const getSummaries = query({
   args: { startupName: v.string() },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      return [];
-    }
-    const userId = identity.subject;
-    if (!userId) {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) {
       return [];
     }
 
@@ -44,12 +37,8 @@ export const getSummaries = query({
 export const getScrapedData = query({
   args: { startupName: v.string() },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      return null;
-    }
-    const userId = identity.subject;
-    if (!userId) {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) {
       return null;
     }
 
@@ -64,12 +53,8 @@ export const getScrapedData = query({
 export const getAgents = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      return [];
-    }
-    const userId = identity.subject;
-    if (!userId) {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) {
       return [];
     }
 
@@ -84,12 +69,8 @@ export const getAgents = query({
 export const getActiveAgents = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      return [];
-    }
-    const userId = identity.subject;
-    if (!userId) {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) {
       return [];
     }
 
@@ -104,12 +85,8 @@ export const getActiveAgents = query({
 export const getPortfolioCompanies = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      return [];
-    }
-    const userId = identity.subject;
-    if (!userId) {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) {
       return [];
     }
 
@@ -125,12 +102,8 @@ export const getPortfolioCompanies = query({
 export const isInPortfolio = query({
   args: { startupName: v.string() },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      return false;
-    }
-    const userId = identity.subject;
-    if (!userId) {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) {
       return false;
     }
 

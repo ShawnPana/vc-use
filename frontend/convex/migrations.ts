@@ -1,7 +1,7 @@
-import { mutation } from "./_generated/server";
+import { internalMutation } from "./_generated/server";
 
 // Migration to delete all old data without userId
-export const deleteOldData = mutation({
+export const deleteOldData = internalMutation({
   args: {},
   handler: async (ctx) => {
     // Delete all existing data to allow for schema change

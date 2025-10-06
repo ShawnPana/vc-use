@@ -3,6 +3,7 @@
 import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
 const RATE_LIMIT_DELAY_MS = 500;
 
@@ -59,14 +60,14 @@ export const seedDefaultAgents = action({
   args: {},
   handler: async (ctx): Promise<{ seeded: boolean; count: number }> => {
     // Get auth user ID in the action
-    const userId = await ctx.auth.getUserIdentity();
-    if (!userId) {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) {
       throw new Error("User must be authenticated");
     }
 
     // Use internal mutation to avoid circular dependency
     const result = await ctx.runMutation(api.mutations.seedAgentsIfEmpty, {
-      userId: userId.subject,
+      userId: userId,
       agents: AGENTS.map((agent, index) => ({
         agentId: agent.id,
         name: agent.name,
