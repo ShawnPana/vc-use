@@ -294,6 +294,9 @@ function MainApp() {
       setIsEnrichingFounders(true);
       runDeepResearch({ startupName }).catch((error) => {
         console.error("Failed to run deep research:", error);
+        if (error.message?.includes("Connection lost")) {
+          setErrorMessage("Deep research timed out. The data may still be processing. Try refreshing in a moment, or click Refresh to retry.");
+        }
       }).finally(() => {
         setIsDeepResearching(false);
         setIsEnrichingFounders(false);

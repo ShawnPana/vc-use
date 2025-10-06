@@ -4,3 +4,4 @@ python-dotenv
 fastapi
 pydantic
 psutil
+httpx

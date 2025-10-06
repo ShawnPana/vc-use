@@ -8,6 +8,7 @@ import os
 import asyncio
 import tracemalloc
 import psutil
+import httpx
 from dotenv import load_dotenv
 
 from scrapers.analyze_company import analyze_company, research_founders, research_hype, research_competitors
@@ -58,12 +59,14 @@ async def verify_api_key(api_key: str = Security(api_key_header)):
 class CompanyAnalysisRequest(BaseModel):
     company_name: str
     debug: Optional[bool] = False
+    callback_url: Optional[str] = None
 
 class FounderResearchRequest(BaseModel):
     company_name: str
     founders: FounderList
     company_bio: Optional[str] = None
     company_website: Optional[str] = None
+    callback_url: Optional[str] = None
 
 class CompanyAnalysisResponse(BaseModel):
     success: bool
@@ -303,11 +306,34 @@ async def api_full_analysis(
         await browser1.stop()
         await browser2.stop()
 
-        return FullAnalysisResponse(
+        response_data = FullAnalysisResponse(
             success=True,
             company=company,
             hype=hype
         )
+
+        # If callback URL provided, send results there
+        if request.callback_url:
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    await client.post(
+                        request.callback_url,
+                        json={
+                            "startupName": request.company_name,
+                            "company": company.model_dump(),
+                            "hype": hype.model_dump()
+                        },
+                        headers={
+                            "Content-Type": "application/json",
+                            "X-API-Key": api_key
+                        }
+                    )
+                print(f"✅ Sent full analysis results to callback: {request.callback_url}")
+            except Exception as callback_error:
+                print(f"⚠️ Failed to send callback: {callback_error}")
+                # Don't fail the request if callback fails
+
+        return response_data
     except Exception as e:
         return FullAnalysisResponse(
             success=False,
@@ -324,6 +350,8 @@ async def api_deep_research(
     Deep research on company founders and competitors.
     Runs research_founders and research_competitors in parallel.
     Returns detailed founder info and competitor list.
+
+    If callback_url is provided, sends results there and returns immediately.
     """
     try:
         # Run research_founders and research_competitors in parallel
@@ -338,11 +366,34 @@ async def api_deep_research(
         await browser1.stop()
         await browser2.stop()
 
-        return DeepResearchResponse(
+        response_data = DeepResearchResponse(
             success=True,
             founders=founders,
             competitors=competitors
         )
+
+        # If callback URL provided, send results there
+        if request.callback_url:
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    await client.post(
+                        request.callback_url,
+                        json={
+                            "startupName": request.company_name,
+                            "founders": founders.model_dump(),
+                            "competitors": competitors.model_dump()
+                        },
+                        headers={
+                            "Content-Type": "application/json",
+                            "X-API-Key": api_key  # Use the same API key for authentication
+                        }
+                    )
+                print(f"✅ Sent deep research results to callback: {request.callback_url}")
+            except Exception as callback_error:
+                print(f"⚠️ Failed to send callback: {callback_error}")
+                # Don't fail the request if callback fails
+
+        return response_data
     except Exception as e:
         return DeepResearchResponse(
             success=False,
