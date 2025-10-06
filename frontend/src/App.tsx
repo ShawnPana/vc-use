@@ -19,6 +19,8 @@ import {
   LogOut,
   RefreshCw,
   Swords,
+  Linkedin,
+  Twitter,
 } from "lucide-react";
 import AgentCard from "./components/AgentCard";
 import { BackgroundCircles } from "@/components/BackgroundCircles";
@@ -758,18 +760,38 @@ function MainApp() {
               <div className="dashboard__tile-body dashboard__tile-body--scroll">
                 {parsedScrapedData?.founders && parsedScrapedData.founders.length > 0 ? (
                   <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                    {parsedScrapedData.founders.map((founder: any, idx: number) => (
-                      <div key={idx} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                        <span style={{ fontWeight: 500, fontSize: "0.95rem" }}>{founder.name}</span>
-                        {isEnrichingFounders && (!founder.bio || founder.bio === "None") && (
-                          <div className="loading-dots" style={{ display: "flex", gap: "0.15rem" }}>
-                            <span style={{ width: "4px", height: "4px", borderRadius: "50%", background: "var(--color-primary)", animation: "blink 1.4s infinite both" }}></span>
-                            <span style={{ width: "4px", height: "4px", borderRadius: "50%", background: "var(--color-primary)", animation: "blink 1.4s infinite both", animationDelay: "0.2s" }}></span>
-                            <span style={{ width: "4px", height: "4px", borderRadius: "50%", background: "var(--color-primary)", animation: "blink 1.4s infinite both", animationDelay: "0.4s" }}></span>
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                    <div>
+                      <h4 style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--color-foreground)", marginBottom: "0.5rem" }}>Founder Names</h4>
+                      {parsedScrapedData.founders.map((founder: any, idx: number) => (
+                        <div key={idx} style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.4rem" }}>
+                          <span style={{ fontWeight: 500, fontSize: "0.95rem" }}>{founder.name}</span>
+                          {(founder.linkedin || founder.twitter) && (
+                            <div style={{ display: "flex", gap: "0.35rem", alignItems: "center" }}>
+                              {founder.linkedin && (
+                                <a href={founder.linkedin} target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-muted-foreground)", display: "flex", transition: "color 0.2s" }} onMouseEnter={(e) => e.currentTarget.style.color = "var(--color-primary)"} onMouseLeave={(e) => e.currentTarget.style.color = "var(--color-muted-foreground)"}>
+                                  <Linkedin size={14} />
+                                </a>
+                              )}
+                              {founder.twitter && (
+                                <a href={founder.twitter} target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-muted-foreground)", display: "flex", transition: "color 0.2s" }} onMouseEnter={(e) => e.currentTarget.style.color = "var(--color-primary)"} onMouseLeave={(e) => e.currentTarget.style.color = "var(--color-muted-foreground)"}>
+                                  <Twitter size={14} />
+                                </a>
+                              )}
+                            </div>
+                          )}
+                          {isEnrichingFounders && (!founder.bio || founder.bio === "None") && (
+                            <div className="loading-dots" style={{ display: "flex", gap: "0.15rem" }}>
+                              <span style={{ width: "4px", height: "4px", borderRadius: "50%", background: "var(--color-primary)", animation: "blink 1.4s infinite both" }}></span>
+                              <span style={{ width: "4px", height: "4px", borderRadius: "50%", background: "var(--color-primary)", animation: "blink 1.4s infinite both", animationDelay: "0.2s" }}></span>
+                              <span style={{ width: "4px", height: "4px", borderRadius: "50%", background: "var(--color-primary)", animation: "blink 1.4s infinite both", animationDelay: "0.4s" }}></span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {getSummaryContent("founder_story") && !getSummaryContent("founder_story").toLowerCase().includes("unfortunately") && (
+                      <p style={{ fontSize: "0.95rem", lineHeight: 1.6, paddingTop: "0.25rem" }}>{getSummaryContent("founder_story")}</p>
+                    )}
                   </div>
                 ) : isEnrichingFounders || isSummariesLoading ? (
                   <p className="dashboard__placeholder">Researching founding team…</p>
