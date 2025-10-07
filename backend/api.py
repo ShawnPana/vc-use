@@ -10,9 +10,11 @@ import tracemalloc
 import psutil
 import httpx
 from dotenv import load_dotenv
+from celery.result import AsyncResult
 
 from scrapers.analyze_company import analyze_company, research_founders, research_hype, research_competitors
 from scrapers.models import Company, FounderList, Founder, SocialMedia, Hype, CompetitorList
+from tasks import full_analysis_task, deep_research_task
 
 load_dotenv()
 
@@ -75,6 +77,8 @@ class CompanyAnalysisResponse(BaseModel):
 
 class FullAnalysisResponse(BaseModel):
     success: bool
+    task_id: Optional[str] = None
+    status: Optional[str] = None
     company: Optional[Company] = None
     hype: Optional[Hype] = None
     error: Optional[str] = None
@@ -91,6 +95,8 @@ class HypeResearchResponse(BaseModel):
 
 class DeepResearchResponse(BaseModel):
     success: bool
+    task_id: Optional[str] = None
+    status: Optional[str] = None
     founders: Optional[FounderList] = None
     competitors: Optional[CompetitorList] = None
     error: Optional[str] = None
@@ -101,6 +107,12 @@ class CompetitorResearchRequest(BaseModel):
 class CompetitorResearchResponse(BaseModel):
     success: bool
     data: Optional[CompetitorList] = None
+    error: Optional[str] = None
+
+class TaskStatusResponse(BaseModel):
+    task_id: str
+    status: str  # PENDING, STARTED, SUCCESS, FAILURE, RETRY
+    result: Optional[dict] = None
     error: Optional[str] = None
 
 # Health check endpoint
@@ -175,6 +187,37 @@ async def cleanup_sessions(api_key: str = Security(verify_api_key)):
     import gc
     gc.collect()
     return {"status": "cleanup_complete", "message": "Forced garbage collection"}
+
+@app.get("/api/task-status/{task_id}", response_model=TaskStatusResponse)
+async def get_task_status(
+    task_id: str,
+    api_key: str = Security(verify_api_key)
+):
+    """
+    Check the status of a background task by its ID.
+
+    Status values:
+    - PENDING: Task is queued but not started yet
+    - STARTED: Task is currently running
+    - SUCCESS: Task completed successfully
+    - FAILURE: Task failed
+    - RETRY: Task is being retried after a failure
+    """
+    task_result = AsyncResult(task_id)
+
+    response = TaskStatusResponse(
+        task_id=task_id,
+        status=task_result.status,
+        result=None,
+        error=None
+    )
+
+    if task_result.successful():
+        response.result = task_result.result
+    elif task_result.failed():
+        response.error = str(task_result.info)
+
+    return response
 
 # Company analysis endpoint
 @app.post("/api/analyze-company", response_model=CompanyAnalysisResponse)
@@ -254,58 +297,20 @@ async def api_research_competitor(
             error=str(e)
         )
 
-# Background task for full analysis
-async def process_full_analysis_background(request: CompanyAnalysisRequest, api_key: str):
-    """Background task that does the actual scraping and sends callback"""
-    try:
-        print(f"🔄 [Background] Starting full analysis for: {request.company_name}")
-
-        # Run analyze_company and research_hype in parallel
-        results = await asyncio.gather(
-            analyze_company(request.company_name),
-            research_hype(request.company_name)
-        )
-
-        (company, browser1), (hype, browser2) = results
-
-        # Stop both browsers after both complete
-        await browser1.stop()
-        await browser2.stop()
-
-        print(f"✅ [Background] Completed scraping for: {request.company_name}")
-
-        # If callback URL provided, send results there
-        if request.callback_url:
-            try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    await client.post(
-                        request.callback_url,
-                        json={
-                            "startupName": request.company_name,
-                            "company": company.model_dump(),
-                            "hype": hype.model_dump()
-                        },
-                        headers={
-                            "Content-Type": "application/json",
-                            "X-API-Key": api_key
-                        }
-                    )
-                print(f"✅ Sent full analysis results to callback: {request.callback_url}")
-            except Exception as callback_error:
-                print(f"⚠️ Failed to send callback: {callback_error}")
-    except Exception as e:
-        print(f"❌ [Background] Error in full analysis for {request.company_name}: {e}")
+# DEPRECATED: Old background task - kept for reference, now using Celery
+# async def process_full_analysis_background(request: CompanyAnalysisRequest, api_key: str):
+#     """Background task that does the actual scraping and sends callback"""
+#     ...
 
 # Full company analysis (company + hype in parallel)
 @app.post("/api/full-analysis", response_model=FullAnalysisResponse)
 async def api_full_analysis(
     request: CompanyAnalysisRequest,
-    background_tasks: BackgroundTasks,
     api_key: str = Security(verify_api_key)
 ):
     """
     Complete company analysis including company info and hype research.
-    Returns immediately and processes in background, calling webhook when done.
+    Returns immediately with task_id, processes in Celery queue with max concurrency.
 
     Use debug=true to return mock data instantly for testing.
     """
@@ -313,6 +318,7 @@ async def api_full_analysis(
     if request.debug:
         return FullAnalysisResponse(
             success=True,
+            status="completed",
             company=Company(
                 company_website=f"https://{request.company_name.lower().replace(' ', '')}.com",
                 company_bio=f"Debug mode: {request.company_name} is a test company.",
@@ -335,79 +341,56 @@ async def api_full_analysis(
             )
         )
 
-    # Schedule background task
-    background_tasks.add_task(process_full_analysis_background, request, api_key)
+    # Queue task in Celery
+    task = full_analysis_task.delay(
+        company_name=request.company_name,
+        callback_url=request.callback_url,
+        api_key=api_key
+    )
 
-    print(f"📨 Accepted full-analysis request for: {request.company_name}, processing in background...")
+    print(f"📨 Queued full-analysis task {task.id} for: {request.company_name}")
 
-    # Return immediately
+    # Return immediately with task ID
     return FullAnalysisResponse(
         success=True,
+        task_id=task.id,
+        status="queued",
         company=None,
         hype=None
     )
 
-# Background task for deep research
-async def process_deep_research_background(request: FounderResearchRequest, api_key: str):
-    """Background task that does the actual deep research and sends callback"""
-    try:
-        print(f"🔄 [Background] Starting deep research for: {request.company_name}")
-
-        # Run research_founders and research_competitors in parallel
-        results = await asyncio.gather(
-            research_founders(request.company_name, request.founders),
-            research_competitors(request.company_name, request.company_bio, request.company_website)
-        )
-
-        (founders, browser1), (competitors, browser2) = results
-
-        # Stop both browsers after both complete
-        await browser1.stop()
-        await browser2.stop()
-
-        print(f"✅ [Background] Completed deep research for: {request.company_name}")
-
-        # If callback URL provided, send results there
-        if request.callback_url:
-            try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    await client.post(
-                        request.callback_url,
-                        json={
-                            "startupName": request.company_name,
-                            "founders": founders.model_dump(),
-                            "competitors": competitors.model_dump()
-                        },
-                        headers={
-                            "Content-Type": "application/json",
-                            "X-API-Key": api_key
-                        }
-                    )
-                print(f"✅ Sent deep research results to callback: {request.callback_url}")
-            except Exception as callback_error:
-                print(f"⚠️ Failed to send callback: {callback_error}")
-    except Exception as e:
-        print(f"❌ [Background] Error in deep research for {request.company_name}: {e}")
+# DEPRECATED: Old background task - kept for reference, now using Celery
+# async def process_deep_research_background(request: FounderResearchRequest, api_key: str):
+#     """Background task that does the actual deep research and sends callback"""
+#     ...
 
 # Deep research endpoint (founders + competitors in parallel)
 @app.post("/api/deep-research", response_model=DeepResearchResponse)
 async def api_deep_research(
     request: FounderResearchRequest,
-    background_tasks: BackgroundTasks,
     api_key: str = Security(verify_api_key)
 ):
     """
     Deep research on company founders and competitors.
-    Returns immediately and processes in background, calling webhook when done.
+    Returns immediately with task_id, processes in Celery queue with max concurrency.
     """
-    # Schedule background task
-    background_tasks.add_task(process_deep_research_background, request, api_key)
+    # Queue task in Celery
+    task = deep_research_task.delay(
+        company_name=request.company_name,
+        founders_dict=request.founders.model_dump(),
+        company_bio=request.company_bio,
+        company_website=request.company_website,
+        callback_url=request.callback_url,
+        api_key=api_key
+    )
 
-    print(f"📨 Accepted deep-research request for: {request.company_name}, processing in background...")
+    print(f"📨 Queued deep-research task {task.id} for: {request.company_name}")
 
-    # Return immediately
+    # Return immediately with task ID
     return DeepResearchResponse(
         success=True,
+        task_id=task.id,
+        status="queued",
         founders=None,
         competitors=None
     )
