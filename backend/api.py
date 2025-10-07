@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Security
+from fastapi import FastAPI, HTTPException, Security, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
@@ -60,7 +60,6 @@ class CompanyAnalysisRequest(BaseModel):
     company_name: str
     debug: Optional[bool] = False
     callback_url: Optional[str] = None
-    user_id: Optional[str] = None
 
 class FounderResearchRequest(BaseModel):
     company_name: str
@@ -68,7 +67,6 @@ class FounderResearchRequest(BaseModel):
     company_bio: Optional[str] = None
     company_website: Optional[str] = None
     callback_url: Optional[str] = None
-    user_id: Optional[str] = None
 
 class CompanyAnalysisResponse(BaseModel):
     success: bool
@@ -256,45 +254,11 @@ async def api_research_competitor(
             error=str(e)
         )
 
-# Full company analysis (company + hype in parallel)
-@app.post("/api/full-analysis", response_model=FullAnalysisResponse)
-async def api_full_analysis(
-    request: CompanyAnalysisRequest,
-    api_key: str = Security(verify_api_key)
-):
-    """
-    Complete company analysis including company info and hype research.
-    Runs analyze_company and research_hype in parallel.
-    Returns company data and hype info. Frontend should call /api/deep-research separately for founders + competitors.
-
-    Use debug=true to return mock data instantly for testing.
-    """
+# Background task for full analysis
+async def process_full_analysis_background(request: CompanyAnalysisRequest, api_key: str):
+    """Background task that does the actual scraping and sends callback"""
     try:
-        # Debug mode: return mock data immediately
-        if request.debug:
-            return FullAnalysisResponse(
-                success=True,
-                company=Company(
-                    company_website=f"https://{request.company_name.lower().replace(' ', '')}.com",
-                    company_bio=f"Debug mode: {request.company_name} is a test company.",
-                    company_summary=f"Mock summary for {request.company_name}. This is debug data.",
-                    founders_info=FounderList(
-                        founders=[
-                            Founder(
-                                name="Debug Founder",
-                                social_media=SocialMedia(linkedin="https://linkedin.com/in/debug", X="https://x.com/debug"),
-                                personal_website="https://debug.com",
-                                bio="Mock founder bio for debugging"
-                            )
-                        ]
-                    )
-                ),
-                hype=Hype(
-                    hype_summary="Debug hype summary",
-                    numbers="Debug funding data",
-                    recent_news="Debug news"
-                )
-            )
+        print(f"🔄 [Background] Starting full analysis for: {request.company_name}")
 
         # Run analyze_company and research_hype in parallel
         results = await asyncio.gather(
@@ -308,11 +272,7 @@ async def api_full_analysis(
         await browser1.stop()
         await browser2.stop()
 
-        response_data = FullAnalysisResponse(
-            success=True,
-            company=company,
-            hype=hype
-        )
+        print(f"✅ [Background] Completed scraping for: {request.company_name}")
 
         # If callback URL provided, send results there
         if request.callback_url:
@@ -322,7 +282,6 @@ async def api_full_analysis(
                         request.callback_url,
                         json={
                             "startupName": request.company_name,
-                            "userId": request.user_id,
                             "company": company.model_dump(),
                             "hype": hype.model_dump()
                         },
@@ -334,29 +293,66 @@ async def api_full_analysis(
                 print(f"✅ Sent full analysis results to callback: {request.callback_url}")
             except Exception as callback_error:
                 print(f"⚠️ Failed to send callback: {callback_error}")
-                # Don't fail the request if callback fails
-
-        return response_data
     except Exception as e:
-        return FullAnalysisResponse(
-            success=False,
-            error=str(e)
-        )
+        print(f"❌ [Background] Error in full analysis for {request.company_name}: {e}")
 
-# Deep research endpoint (founders + competitors in parallel)
-@app.post("/api/deep-research", response_model=DeepResearchResponse)
-async def api_deep_research(
-    request: FounderResearchRequest,
+# Full company analysis (company + hype in parallel)
+@app.post("/api/full-analysis", response_model=FullAnalysisResponse)
+async def api_full_analysis(
+    request: CompanyAnalysisRequest,
+    background_tasks: BackgroundTasks,
     api_key: str = Security(verify_api_key)
 ):
     """
-    Deep research on company founders and competitors.
-    Runs research_founders and research_competitors in parallel.
-    Returns detailed founder info and competitor list.
+    Complete company analysis including company info and hype research.
+    Returns immediately and processes in background, calling webhook when done.
 
-    If callback_url is provided, sends results there and returns immediately.
+    Use debug=true to return mock data instantly for testing.
     """
+    # Debug mode: return mock data immediately (synchronous)
+    if request.debug:
+        return FullAnalysisResponse(
+            success=True,
+            company=Company(
+                company_website=f"https://{request.company_name.lower().replace(' ', '')}.com",
+                company_bio=f"Debug mode: {request.company_name} is a test company.",
+                company_summary=f"Mock summary for {request.company_name}. This is debug data.",
+                founders_info=FounderList(
+                    founders=[
+                        Founder(
+                            name="Debug Founder",
+                            social_media=SocialMedia(linkedin="https://linkedin.com/in/debug", X="https://x.com/debug"),
+                            personal_website="https://debug.com",
+                            bio="Mock founder bio for debugging"
+                        )
+                    ]
+                )
+            ),
+            hype=Hype(
+                hype_summary="Debug hype summary",
+                numbers="Debug funding data",
+                recent_news="Debug news"
+            )
+        )
+
+    # Schedule background task
+    background_tasks.add_task(process_full_analysis_background, request, api_key)
+
+    print(f"📨 Accepted full-analysis request for: {request.company_name}, processing in background...")
+
+    # Return immediately
+    return FullAnalysisResponse(
+        success=True,
+        company=None,
+        hype=None
+    )
+
+# Background task for deep research
+async def process_deep_research_background(request: FounderResearchRequest, api_key: str):
+    """Background task that does the actual deep research and sends callback"""
     try:
+        print(f"🔄 [Background] Starting deep research for: {request.company_name}")
+
         # Run research_founders and research_competitors in parallel
         results = await asyncio.gather(
             research_founders(request.company_name, request.founders),
@@ -369,11 +365,7 @@ async def api_deep_research(
         await browser1.stop()
         await browser2.stop()
 
-        response_data = DeepResearchResponse(
-            success=True,
-            founders=founders,
-            competitors=competitors
-        )
+        print(f"✅ [Background] Completed deep research for: {request.company_name}")
 
         # If callback URL provided, send results there
         if request.callback_url:
@@ -383,26 +375,42 @@ async def api_deep_research(
                         request.callback_url,
                         json={
                             "startupName": request.company_name,
-                            "userId": request.user_id,
                             "founders": founders.model_dump(),
                             "competitors": competitors.model_dump()
                         },
                         headers={
                             "Content-Type": "application/json",
-                            "X-API-Key": api_key  # Use the same API key for authentication
+                            "X-API-Key": api_key
                         }
                     )
                 print(f"✅ Sent deep research results to callback: {request.callback_url}")
             except Exception as callback_error:
                 print(f"⚠️ Failed to send callback: {callback_error}")
-                # Don't fail the request if callback fails
-
-        return response_data
     except Exception as e:
-        return DeepResearchResponse(
-            success=False,
-            error=str(e)
-        )
+        print(f"❌ [Background] Error in deep research for {request.company_name}: {e}")
+
+# Deep research endpoint (founders + competitors in parallel)
+@app.post("/api/deep-research", response_model=DeepResearchResponse)
+async def api_deep_research(
+    request: FounderResearchRequest,
+    background_tasks: BackgroundTasks,
+    api_key: str = Security(verify_api_key)
+):
+    """
+    Deep research on company founders and competitors.
+    Returns immediately and processes in background, calling webhook when done.
+    """
+    # Schedule background task
+    background_tasks.add_task(process_deep_research_background, request, api_key)
+
+    print(f"📨 Accepted deep-research request for: {request.company_name}, processing in background...")
+
+    # Return immediately
+    return DeepResearchResponse(
+        success=True,
+        founders=None,
+        competitors=None
+    )
 
 if __name__ == "__main__":
     import uvicorn

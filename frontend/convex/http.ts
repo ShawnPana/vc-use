@@ -29,6 +29,19 @@ http.route({
 
       console.log(`[full-analysis-callback] Received data for ${startupName}`);
 
+      // Look up userId from pendingAnalyses
+      const pendingAnalysis = await ctx.runQuery(api.queries.getPendingAnalysis, {
+        startupName,
+      });
+
+      if (!pendingAnalysis) {
+        console.error(`[full-analysis-callback] No pending analysis found for ${startupName}`);
+        return new Response("No pending analysis found", { status: 404 });
+      }
+
+      const userId = pendingAnalysis.userId;
+      console.log(`[full-analysis-callback] Found userId: ${userId}`);
+
       // Format and store the scraped data
       const scrapedData = {
         startupName,
@@ -51,23 +64,32 @@ http.route({
           : null,
       };
 
-      await ctx.runMutation(api.mutations.storeScrapedData, {
+      // Store scraped data as this user
+      await ctx.runMutation(api.mutations.storeScrapedDataAsUser, {
+        userId,
         startupName,
         data: JSON.stringify(scrapedData),
       });
 
       console.log(`[full-analysis-callback] Stored data, now running agent analyses for ${startupName}`);
 
+      // Small delay to ensure data is committed before proceeding
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       // Run agent analyses with the scraped data
-      const activeAgents = await ctx.runQuery(api.queries.getActiveAgents);
+      const activeAgents = await ctx.runQuery(api.queries.getAgentsByUserId, {
+        userId,
+      });
+
       const scrapedDataString = JSON.stringify(scrapedData);
 
-      // Run agents sequentially with rate limiting delays (same as old implementation)
+      // Run agents sequentially with rate limiting delays
       const RATE_LIMIT_DELAY_MS = 500;
       const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-      for (const [index, agent] of activeAgents.entries()) {
-        await ctx.runAction(api.actions.analyzeWithCerebras, {
+      for (const [index, agent] of activeAgents.filter((a: any) => a.isActive).entries()) {
+        await ctx.runAction(api.actions.analyzeWithCerebrasAsUser, {
+          userId,
           startupName,
           agentId: agent.agentId,
           agentName: agent.name,
@@ -76,13 +98,14 @@ http.route({
         });
 
         // Add delay between agents to avoid rate limits (except after last agent)
-        if (index < activeAgents.length - 1) {
+        if (index < activeAgents.filter((a: any) => a.isActive).length - 1) {
           await sleep(RATE_LIMIT_DELAY_MS);
         }
       }
 
       // Generate summaries
-      await ctx.runAction(api.actions.generateSummaries, {
+      await ctx.runAction(api.actions.generateSummariesAsUser, {
+        userId,
         startupName,
         scrapedData: scrapedDataString,
       });
@@ -90,7 +113,8 @@ http.route({
       console.log(`[full-analysis-callback] Completed agent analyses, now triggering deep research for ${startupName}`);
 
       // Automatically trigger deep research with callback
-      await ctx.runAction(api.actions.runDeepResearch, {
+      await ctx.runAction(api.actions.runDeepResearchAsUser, {
+        userId,
         startupName,
       });
 
@@ -132,8 +156,22 @@ http.route({
 
       console.log(`[deep-research-callback] Received data for ${startupName}`);
 
+      // Look up userId from pendingAnalyses
+      const pendingAnalysis = await ctx.runQuery(api.queries.getPendingAnalysis, {
+        startupName,
+      });
+
+      if (!pendingAnalysis) {
+        console.error(`[deep-research-callback] No pending analysis found for ${startupName}`);
+        return new Response("No pending analysis found", { status: 404 });
+      }
+
+      const userId = pendingAnalysis.userId;
+      console.log(`[deep-research-callback] Found userId: ${userId}`);
+
       // Get current scraped data
-      const scrapedData = await ctx.runQuery(api.queries.getScrapedData, {
+      const scrapedData = await ctx.runQuery(api.queries.getScrapedDataByUserId, {
+        userId,
         startupName,
       });
 
@@ -170,13 +208,15 @@ http.route({
         competitors: enrichedCompetitors,
       };
 
-      await ctx.runMutation(api.mutations.storeScrapedData, {
+      await ctx.runMutation(api.mutations.storeScrapedDataAsUser, {
+        userId,
         startupName,
         data: JSON.stringify(updatedScrapedData),
       });
 
       // Regenerate summaries
-      await ctx.runAction(api.actions.generateSummaries, {
+      await ctx.runAction(api.actions.generateSummariesAsUser, {
+        userId,
         startupName,
         scrapedData: JSON.stringify(updatedScrapedData),
       });

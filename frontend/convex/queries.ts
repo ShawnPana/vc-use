@@ -114,3 +114,36 @@ export const isInPortfolio = query({
     return !!company;
   },
 });
+
+export const getPendingAnalysis = query({
+  args: { startupName: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("pendingAnalyses")
+      .withIndex("by_startup", (q) => q.eq("startupName", args.startupName))
+      .first();
+  },
+});
+
+export const getAgentsByUserId = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("agents")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+  },
+});
+
+export const getScrapedDataByUserId = query({
+  args: {
+    userId: v.id("users"),
+    startupName: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("scrapedData")
+      .withIndex("by_user_and_startup", (q) => q.eq("userId", args.userId).eq("startupName", args.startupName))
+      .first();
+  },
+});

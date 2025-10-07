@@ -98,6 +98,7 @@ function MainApp() {
   const { company: urlCompany } = useParams<{ company: string }>();
   const isPortfolioRoute = window.location.pathname === '/portfolio';
   const [previousRoute, setPreviousRoute] = useState<string>('/');
+  const token = useAuthToken();
 
   const [startupName, setStartupName] = useState("");
   const [searchedStartup, setSearchedStartup] = useState<string | null>(null);
@@ -266,8 +267,11 @@ function MainApp() {
   }, [showPortfolio]);
 
 
-  // Initialize agents for current user on mount
+  // Initialize agents for current user on mount (only when authenticated)
   useEffect(() => {
+    // Only initialize if we have a valid token
+    if (!token) return;
+
     initializeMyAgents()
       .then((result) => {
         console.log("Agent initialization result:", result);
@@ -275,7 +279,7 @@ function MainApp() {
       .catch((error) => {
         console.error("Failed to initialize agents:", error);
       });
-  }, [initializeMyAgents]);
+  }, [initializeMyAgents, token]);
 
   const handleAnalyze = async () => {
     if (!startupName.trim()) return;
@@ -287,20 +291,8 @@ function MainApp() {
 
     try {
       // Run initial analysis (company + hype)
+      // The callback will automatically trigger deep research when ready
       await analyzeStartup({ startupName, debug: debugMode });
-
-      // After initial analysis completes, automatically run deep research (founders + competitors) in background
-      setIsDeepResearching(true);
-      setIsEnrichingFounders(true);
-      runDeepResearch({ startupName }).catch((error) => {
-        console.error("Failed to run deep research:", error);
-        if (error.message?.includes("Connection lost")) {
-          setErrorMessage("Deep research timed out. The data may still be processing. Try refreshing in a moment, or click Refresh to retry.");
-        }
-      }).finally(() => {
-        setIsDeepResearching(false);
-        setIsEnrichingFounders(false);
-      });
     } catch (error) {
       console.error("Analysis error:", error);
       let message = "Failed to analyze startup. Please try again.";
@@ -330,17 +322,8 @@ function MainApp() {
 
     try {
       // Always re-scrape and re-analyze
+      // The callback will automatically trigger deep research when ready
       await rerunAnalysis({ startupName: searchedStartup });
-
-      // Automatically run deep research after refresh
-      setIsDeepResearching(true);
-      setIsEnrichingFounders(true);
-      await runDeepResearch({ startupName: searchedStartup }).catch((error) => {
-        console.error("Failed to run deep research:", error);
-      }).finally(() => {
-        setIsDeepResearching(false);
-        setIsEnrichingFounders(false);
-      });
     } catch (error) {
       console.error("Rerun error:", error);
       let message = "Failed to refresh analysis. Please try again.";
@@ -605,15 +588,6 @@ function MainApp() {
                       void navigate(`/company/${encodeURIComponent(example)}`, { state: { from: '/' } });
                       setIsAnalyzing(true);
                       analyzeStartup({ startupName: example, debug: debugMode })
-                        .then(() => {
-                          // Trigger founder enrichment after initial analysis
-                          setIsEnrichingFounders(true);
-                          enrichFounderInfo({ startupName: example })
-                            .catch((error) => {
-                              console.error("Failed to enrich founder info:", error);
-                            })
-                            .finally(() => setIsEnrichingFounders(false));
-                        })
                         .catch((error) => console.error("Analysis error:", error))
                         .finally(() => setIsAnalyzing(false));
                     }, 100);

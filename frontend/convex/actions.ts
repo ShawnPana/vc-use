@@ -11,7 +11,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 // Call backend Browser Use API to scrape startup data
 export const scrapeStartupData = action({
   args: { startupName: v.string(), debug: v.optional(v.boolean()) },
-  handler: async (_ctx, args) => {
+  handler: async (ctx, args) => {
     const backendUrl = process.env.BACKEND_API_URL || "http://localhost:8000";
     const apiKey = process.env.BACKEND_API_KEY;
 
@@ -19,30 +19,49 @@ export const scrapeStartupData = action({
       throw new Error("BACKEND_API_KEY not configured");
     }
 
+    // Create pending analysis record so webhook can look up userId
+    await ctx.runMutation(api.mutations.createPendingAnalysis, {
+      startupName: args.startupName,
+    });
+
     console.log(`[scrapeStartupData] Starting full-analysis for: ${args.startupName} (async mode)`);
+    console.log(`[scrapeStartupData] Backend URL: ${backendUrl}`);
 
     // CONVEX_SITE_URL is a built-in environment variable
     const convexSiteUrl = process.env.CONVEX_SITE_URL;
     const callbackUrl = `${convexSiteUrl}/full-analysis-callback`;
 
-    try {
-      // Call backend with callback URL - don't await, let it process asynchronously
-      fetch(`${backendUrl}/api/full-analysis`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-API-Key": apiKey,
-        },
-        body: JSON.stringify({
-          company_name: args.startupName,
-          debug: args.debug || false,
-          callback_url: callbackUrl,
-        }),
-      }).catch((error) => {
-        console.error(`[scrapeStartupData] Failed to trigger async full analysis:`, error);
-      });
+    console.log(`[scrapeStartupData] Callback URL: ${callbackUrl}`);
 
-      console.log(`[scrapeStartupData] Triggered async full analysis with callback to ${callbackUrl}`);
+    try {
+      const requestBody = {
+        company_name: args.startupName,
+        debug: args.debug || false,
+        callback_url: callbackUrl,
+      };
+
+      console.log(`[scrapeStartupData] Sending request to ${backendUrl}/api/full-analysis`, requestBody);
+
+      // Call backend with callback URL - await to see if it actually works
+      try {
+        const response = await fetch(`${backendUrl}/api/full-analysis`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-API-Key": apiKey,
+          },
+          body: JSON.stringify(requestBody),
+        });
+
+        console.log(`[scrapeStartupData] Backend response status: ${response.status}`);
+
+        const data = await response.json();
+        console.log(`[scrapeStartupData] Backend response data:`, data);
+        console.log(`[scrapeStartupData] Successfully triggered async full analysis with callback to ${callbackUrl}`);
+      } catch (error) {
+        console.error(`[scrapeStartupData] Failed to trigger async full analysis:`, error);
+        throw new Error(`Failed to contact backend: ${error instanceof Error ? error.message : String(error)}`);
+      }
 
       // Return immediately - the backend will call us back when done
       return {
@@ -422,60 +441,30 @@ export const analyzeSingleAgent = action({
 // Rerun analysis for a cached company (forces fresh data scraping)
 export const rerunAnalysis = action({
   args: { startupName: v.string() },
-  handler: async (ctx, args): Promise<{ success: boolean }> => {
+  handler: async (ctx, args): Promise<{ success: boolean; async?: boolean }> => {
     console.log(`[rerunAnalysis] Starting rerun for: ${args.startupName}`);
 
-    // Always scrape fresh data for rerun
-    console.log(`[rerunAnalysis] Force re-scraping fresh data for ${args.startupName}`);
-    const scrapedData = await ctx.runAction(api.actions.scrapeStartupData, {
+    // Clear existing analyses and summaries to show loading states
+    console.log(`[rerunAnalysis] Clearing existing analyses and summaries`);
+    await ctx.runMutation(api.mutations.clearAnalysesAndSummaries, {
+      startupName: args.startupName,
+    });
+
+    // Initialize agents if they don't exist
+    const dbAgents = await ctx.runQuery(api.queries.getActiveAgents);
+    if (dbAgents.length === 0) {
+      await ctx.runMutation(api.mutations.initializeMyAgents);
+    }
+
+    // Trigger async scraping - the webhook will handle agent analyses when data arrives
+    console.log(`[rerunAnalysis] Triggering async scrape for ${args.startupName}`);
+    await ctx.runAction(api.actions.scrapeStartupData, {
       startupName: args.startupName,
       debug: false,
     });
-    const scrapedDataString = JSON.stringify(scrapedData);
 
-    // Store the fresh scraped data
-    console.log(`[rerunAnalysis] Storing fresh scraped data`);
-    await ctx.runMutation(api.mutations.storeScrapedData, {
-      startupName: args.startupName,
-      data: scrapedDataString,
-    });
-
-    // Get active agents
-    let dbAgents = await ctx.runQuery(api.queries.getActiveAgents);
-
-    if (dbAgents.length === 0) {
-      console.log(`[rerunAnalysis] No agents found, initializing defaults`);
-      await ctx.runMutation(api.mutations.initializeMyAgents);
-      dbAgents = await ctx.runQuery(api.queries.getActiveAgents);
-    }
-
-    console.log(`[rerunAnalysis] Re-running analyses with ${dbAgents.length} agents`);
-    // Re-run all agent analyses with fresh data
-    for (const [index, agent] of dbAgents.entries()) {
-      try {
-        await ctx.runAction(api.actions.analyzeWithCerebras, {
-          startupName: args.startupName,
-          agentId: agent.agentId,
-          agentName: agent.name,
-          agentPrompt: agent.prompt,
-          scrapedData: scrapedDataString,
-        });
-      } finally {
-        if (index < dbAgents.length - 1) {
-          await sleep(RATE_LIMIT_DELAY_MS);
-        }
-      }
-    }
-
-    // Regenerate summaries with fresh data
-    console.log(`[rerunAnalysis] Regenerating summaries`);
-    await ctx.runAction(api.actions.generateSummaries, {
-      startupName: args.startupName,
-      scrapedData: scrapedDataString,
-    });
-
-    console.log(`[rerunAnalysis] Completed successfully for ${args.startupName}`);
-    return { success: true };
+    console.log(`[rerunAnalysis] Async scrape triggered for ${args.startupName}`);
+    return { success: true, async: true };
   },
 });
 
@@ -483,6 +472,8 @@ export const rerunAnalysis = action({
 export const analyzeStartup = action({
   args: { startupName: v.string(), debug: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
+    console.log(`[analyzeStartup] Starting analysis for: ${args.startupName}, debug: ${args.debug}`);
+
     try {
       // Initialize agents if they don't exist
       const dbAgents = await ctx.runQuery(api.queries.getActiveAgents);
@@ -491,14 +482,16 @@ export const analyzeStartup = action({
       }
 
       // Trigger async scraping - the webhook will handle agent analyses when data arrives
+      console.log(`[analyzeStartup] Triggering async scrape for ${args.startupName}`);
       await ctx.runAction(api.actions.scrapeStartupData, {
         startupName: args.startupName,
         debug: args.debug,
       });
 
+      console.log(`[analyzeStartup] Async scrape triggered for ${args.startupName}`);
       return { success: true, async: true };
     } catch (error) {
-      console.error("Error in analyzeStartup:", error);
+      console.error(`[analyzeStartup] Error for ${args.startupName}:`, error);
       if (error instanceof Error && error.message.includes("must be authenticated")) {
         throw new Error("You must be signed in to analyze startups.");
       }
@@ -608,6 +601,296 @@ export const generateSummaries = action({
       } catch (error) {
         console.error(`Error generating summary ${summary.type}:`, error);
       }
+    }
+  },
+});
+
+// User-scoped version of analyzeWithCerebras for webhooks
+export const analyzeWithCerebrasAsUser = action({
+  args: {
+    userId: v.id("users"),
+    startupName: v.string(),
+    agentId: v.string(),
+    agentName: v.string(),
+    agentPrompt: v.string(),
+    scrapedData: v.string(),
+  },
+  handler: async (ctx, args) => {
+    console.log(`[analyzeWithCerebrasAsUser] Starting analysis for ${args.startupName} with agent: ${args.agentName}`);
+
+    // Create analysis record with loading status
+    const analysisId = await ctx.runMutation(api.mutations.createAnalysisAsUser, {
+      userId: args.userId,
+      startupName: args.startupName,
+      agentId: args.agentId,
+      agentName: args.agentName,
+    });
+
+    try {
+      // Call Cerebras API
+      const cerebrasApiKey = process.env.CEREBRAS_API_KEY;
+      if (!cerebrasApiKey) {
+        throw new Error("CEREBRAS_API_KEY not configured");
+      }
+
+      console.log(`[analyzeWithCerebrasAsUser] Calling Cerebras API for ${args.agentName}`);
+      const response = await fetch("https://api.cerebras.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${cerebrasApiKey}`,
+        },
+        body: JSON.stringify({
+          model: "llama-3.3-70b",
+          messages: [
+            {
+              role: "system",
+              content: `${args.agentPrompt}\n\nIMPORTANT: DO NOT confuse this company with another company. This company should in no case be referred to as another company - it is its own distinct company with this specific name.\n\nIMPORTANT: Format your entire response using Markdown with these requirements:\n- Use headers (##, ###), bold (**text**), italic (*text*), bullet points (- item), numbered lists (1. item)\n- Use ONLY ONE newline between sections, never multiple blank lines\n- Keep formatting compact and dense\n- Do NOT add any introductory or explanatory text - start directly with your analysis\n- Example format:\n##SECTION\nContent here.\n\n##NEXT SECTION\nMore content.`,
+            },
+            {
+              role: "user",
+              content: `Here is the startup data gathered from web research:\n\n${args.scrapedData}`,
+            },
+          ],
+          temperature: 0.7,
+          max_tokens: 1000,
+        }),
+      });
+
+      console.log(`[analyzeWithCerebrasAsUser] Cerebras API response status: ${response.status} for ${args.agentName}`);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[analyzeWithCerebrasAsUser] Cerebras API error for ${args.agentName}: ${response.status} - ${errorText}`);
+        throw new Error(`Cerebras API error: ${response.status} ${errorText}`);
+      }
+
+      const data = await response.json();
+      const analysis = data.choices[0]?.message?.content || "No analysis available";
+
+      console.log(`[analyzeWithCerebrasAsUser] Analysis completed for ${args.agentName}, length: ${analysis.length} chars`);
+
+      // Update analysis with result
+      await ctx.runMutation(api.mutations.updateAnalysisAsUser, {
+        analysisId,
+        analysis,
+        status: "completed",
+      });
+
+      return analysis;
+    } catch (error) {
+      console.error(`[analyzeWithCerebrasAsUser] Error for ${args.agentName}:`, error);
+      // Update analysis with error
+      await ctx.runMutation(api.mutations.updateAnalysisAsUser, {
+        analysisId,
+        analysis: `Error: ${error instanceof Error ? error.message : "Unknown error"}`,
+        status: "error",
+      });
+      throw error;
+    }
+  },
+});
+
+// User-scoped version of generateSummaries for webhooks
+export const generateSummariesAsUser = action({
+  args: {
+    userId: v.id("users"),
+    startupName: v.string(),
+    scrapedData: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const cerebrasApiKey = process.env.CEREBRAS_API_KEY;
+    if (!cerebrasApiKey) {
+      return;
+    }
+
+    // Parse scraped data to extract rich information
+    const scrapedData = JSON.parse(args.scrapedData);
+
+    // For founder_story, use the actual founder bios if available
+    const founders = scrapedData.founders || [];
+    const founderBios = founders
+      .map((f: any) => `${f.name}: ${f.bio || 'Bio not available'}`)
+      .join('\n');
+
+    // Only generate founder_story if we have founder information
+    const hasFounderInfo = founders.length > 0 && founderBios.trim().length > 0;
+
+    const summaryTypes = [
+      ...(hasFounderInfo ? [{
+        type: "founder_story",
+        prompt: `Based on the following founder information, create a brief, compelling summary of the founders' background and how they came together to start this company. Focus on their unique experiences and complementary skills. 2-3 sentences max.\n\nIMPORTANT: Always create a positive, insightful summary even if biographical information is limited - focus on the team and their potential. If you truly cannot create any summary at all, respond with exactly the word "None" and nothing else. Do NOT return empty strings, quotes, or apologetic messages like "detailed biographies are not available" or "unfortunately". Be confident and forward-looking.\n\nFounder Information:\n${founderBios}`,
+        useDirectData: true,
+      }] : []),
+      {
+        type: "market_position",
+        prompt: "Summarize the company's position in the competitive landscape and their unique differentiation. 2-3 sentences max.",
+        useDirectData: false,
+      },
+      {
+        type: "funding_outlook",
+        prompt: "Provide an assessment of their current funding stage and what they likely need next. 2-3 sentences max.",
+        useDirectData: false,
+      },
+      {
+        type: "company_overview",
+        prompt: `Based on this company data, provide a tight, 2 sentence summary that highlights what they do, who they serve, and why they matter right now.\n\nCompany Bio: ${scrapedData.bio || ''}\nCompany Summary: ${scrapedData.summary || ''}`,
+        useDirectData: true,
+      },
+    ];
+
+    for (const summary of summaryTypes) {
+      try {
+        const response = await fetch("https://api.cerebras.ai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${cerebrasApiKey}`,
+          },
+          body: JSON.stringify({
+            model: "llama-3.3-70b",
+            messages: [
+              {
+                role: "system",
+                content: `${summary.prompt}\n\nIMPORTANT: DO NOT confuse this company with another company. This company should in no case be referred to as another company - it is its own distinct company with this specific name.`,
+              },
+              {
+                role: "user",
+                content: summary.useDirectData
+                  ? "Generate the summary based on the information in the system prompt."
+                  : `Startup data:\n\n${args.scrapedData}`,
+              },
+            ],
+            temperature: 0.7,
+            max_tokens: 200,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          let content = data.choices[0]?.message?.content || "";
+
+          // Clean up content - if it's empty, just quotes, whitespace, or apologetic, set to "None"
+          content = content.trim();
+          const contentLower = content.toLowerCase();
+          if (
+            content === "" ||
+            content === '""' ||
+            content === "''" ||
+            contentLower.includes("although detailed biographies") ||
+            contentLower.includes("unfortunately") ||
+            (contentLower.includes("not available") && contentLower.includes("biograph"))
+          ) {
+            content = "None";
+          }
+
+          await ctx.runMutation(api.mutations.createSummaryAsUser, {
+            userId: args.userId,
+            startupName: args.startupName,
+            summaryType: summary.type,
+            content,
+          });
+        }
+      } catch (error) {
+        console.error(`Error generating summary ${summary.type}:`, error);
+      }
+    }
+  },
+});
+
+// User-scoped version of runDeepResearch for webhooks
+export const runDeepResearchAsUser = action({
+  args: {
+    userId: v.id("users"),
+    startupName: v.string(),
+  },
+  handler: async (ctx, args) => {
+    console.log(`[runDeepResearchAsUser] Starting deep research for: ${args.startupName}`);
+    const backendUrl = process.env.BACKEND_API_URL || "http://localhost:8000";
+    const apiKey = process.env.BACKEND_API_KEY;
+
+    if (!apiKey) {
+      throw new Error("BACKEND_API_KEY not configured");
+    }
+
+    try {
+      // Get the current scraped data to extract founder names
+      const scrapedDataRecord = await ctx.runQuery(api.queries.getScrapedDataByUserId, {
+        userId: args.userId,
+        startupName: args.startupName,
+      });
+
+      if (!scrapedDataRecord?.data) {
+        throw new Error("No scraped data available. Please run initial analysis first.");
+      }
+
+      const parsedData = JSON.parse(scrapedDataRecord.data);
+      const founders = parsedData.founders || [];
+
+      console.log(`[runDeepResearchAsUser] Found ${founders.length} founders`);
+
+      if (founders.length === 0) {
+        throw new Error("No founders found. Cannot run deep research.");
+      }
+
+      console.log(`[runDeepResearchAsUser] Calling /api/deep-research endpoint (async mode)`);
+
+      // CONVEX_SITE_URL is a built-in environment variable
+      const convexSiteUrl = process.env.CONVEX_SITE_URL;
+      const callbackUrl = `${convexSiteUrl}/deep-research-callback`;
+
+      // Call backend deep-research endpoint with callback URL
+      const requestBody = {
+        company_name: args.startupName,
+        company_bio: parsedData.bio || null,
+        company_website: parsedData.website || null,
+        callback_url: callbackUrl,
+        founders: {
+          founders: founders.map((f: any) => ({
+            name: f.name,
+            social_media: {
+              linkedin: f.linkedin || "None",
+              X: f.twitter || "None",
+              other: "None",
+            },
+            personal_website: f.personalWebsite || "None",
+            bio: f.bio || "None",
+          })),
+        },
+      };
+
+      console.log(`[runDeepResearchAsUser] Sending request to ${backendUrl}/api/deep-research`, requestBody);
+
+      // Call backend with callback URL - await to confirm request was received
+      try {
+        const response = await fetch(`${backendUrl}/api/deep-research`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-API-Key": apiKey,
+          },
+          body: JSON.stringify(requestBody),
+        });
+
+        console.log(`[runDeepResearchAsUser] Backend response status: ${response.status}`);
+
+        const data = await response.json();
+        console.log(`[runDeepResearchAsUser] Backend response data:`, data);
+        console.log(`[runDeepResearchAsUser] Successfully triggered async deep research with callback to ${callbackUrl}`);
+      } catch (error) {
+        console.error(`[runDeepResearchAsUser] Failed to trigger async deep research:`, error);
+        throw new Error(`Failed to contact backend for deep research: ${error instanceof Error ? error.message : String(error)}`);
+      }
+
+      // Return immediately - the backend will call us back when done
+      return {
+        success: true,
+        message: "Deep research started. Results will be available shortly.",
+        async: true
+      };
+    } catch (error) {
+      console.error(`[runDeepResearchAsUser] Error for ${args.startupName}:`, error);
+      throw error;
     }
   },
 });

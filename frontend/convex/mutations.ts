@@ -175,6 +175,36 @@ export const storeScrapedData = mutation({
   },
 });
 
+// System mutation for webhooks (doesn't require user authentication)
+export const storeScrapedDataSystem = mutation({
+  args: {
+    userId: v.id("users"),
+    startupName: v.string(),
+    data: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("scrapedData")
+      .withIndex("by_user_and_startup", (q) => q.eq("userId", args.userId).eq("startupName", args.startupName))
+      .first();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        data: args.data,
+        timestamp: Date.now(),
+      });
+      return existing._id;
+    }
+
+    return await ctx.db.insert("scrapedData", {
+      userId: args.userId,
+      startupName: args.startupName,
+      data: args.data,
+      timestamp: Date.now(),
+    });
+  },
+});
+
 export const upsertAgent = mutation({
   args: {
     agentId: v.string(),
@@ -425,6 +455,40 @@ export const addToPortfolio = mutation({
   },
 });
 
+export const clearAnalysesAndSummaries = mutation({
+  args: {
+    startupName: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) {
+      throw new Error("User must be authenticated");
+    }
+
+    // Delete all analyses for this startup
+    const analyses = await ctx.db
+      .query("analyses")
+      .withIndex("by_user_and_startup", (q) => q.eq("userId", userId).eq("startupName", args.startupName))
+      .collect();
+
+    for (const analysis of analyses) {
+      await ctx.db.delete(analysis._id);
+    }
+
+    // Delete all summaries for this startup
+    const summaries = await ctx.db
+      .query("summaries")
+      .withIndex("by_user_and_startup", (q) => q.eq("userId", userId).eq("startupName", args.startupName))
+      .collect();
+
+    for (const summary of summaries) {
+      await ctx.db.delete(summary._id);
+    }
+
+    console.log(`Cleared ${analyses.length} analyses and ${summaries.length} summaries for ${args.startupName}`);
+  },
+});
+
 export const removeFromPortfolio = mutation({
   args: {
     startupName: v.string(),
@@ -445,5 +509,134 @@ export const removeFromPortfolio = mutation({
     }
 
     await ctx.db.delete(company._id);
+  },
+});
+
+export const createPendingAnalysis = mutation({
+  args: {
+    startupName: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) {
+      throw new Error("User must be authenticated");
+    }
+
+    // Delete any existing pending analysis for this startup (to handle retries)
+    const existing = await ctx.db
+      .query("pendingAnalyses")
+      .withIndex("by_startup", (q) => q.eq("startupName", args.startupName))
+      .first();
+
+    if (existing) {
+      await ctx.db.delete(existing._id);
+    }
+
+    // Create new pending analysis record
+    return await ctx.db.insert("pendingAnalyses", {
+      startupName: args.startupName,
+      userId,
+      createdAt: Date.now(),
+    });
+  },
+});
+
+// System mutation for webhooks - stores scraped data for a specific user
+export const storeScrapedDataAsUser = mutation({
+  args: {
+    userId: v.id("users"),
+    startupName: v.string(),
+    data: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("scrapedData")
+      .withIndex("by_user_and_startup", (q) => q.eq("userId", args.userId).eq("startupName", args.startupName))
+      .first();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        data: args.data,
+        timestamp: Date.now(),
+      });
+      return existing._id;
+    }
+
+    return await ctx.db.insert("scrapedData", {
+      userId: args.userId,
+      startupName: args.startupName,
+      data: args.data,
+      timestamp: Date.now(),
+    });
+  },
+});
+
+// System mutation for webhooks - creates analysis for a specific user
+export const createAnalysisAsUser = mutation({
+  args: {
+    userId: v.id("users"),
+    startupName: v.string(),
+    agentId: v.string(),
+    agentName: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.insert("analyses", {
+      userId: args.userId,
+      startupName: args.startupName,
+      agentId: args.agentId,
+      agentName: args.agentName,
+      analysis: "",
+      timestamp: Date.now(),
+      status: "loading",
+    });
+  },
+});
+
+// System mutation for webhooks - updates analysis for a specific user
+export const updateAnalysisAsUser = mutation({
+  args: {
+    analysisId: v.id("analyses"),
+    analysis: v.string(),
+    status: v.union(v.literal("loading"), v.literal("completed"), v.literal("error")),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.analysisId, {
+      analysis: args.analysis,
+      status: args.status,
+      timestamp: Date.now(),
+    });
+  },
+});
+
+// System mutation for webhooks - creates summary for a specific user
+export const createSummaryAsUser = mutation({
+  args: {
+    userId: v.id("users"),
+    startupName: v.string(),
+    summaryType: v.string(),
+    content: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("summaries")
+      .withIndex("by_user_and_startup", (q) => q.eq("userId", args.userId).eq("startupName", args.startupName))
+      .filter((q) => q.eq(q.field("summaryType"), args.summaryType))
+      .first();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        content: args.content,
+        timestamp: Date.now(),
+      });
+      return existing._id;
+    }
+
+    return await ctx.db.insert("summaries", {
+      userId: args.userId,
+      startupName: args.startupName,
+      summaryType: args.summaryType,
+      content: args.content,
+      timestamp: Date.now(),
+    });
   },
 });

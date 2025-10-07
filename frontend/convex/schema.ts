@@ -55,4 +55,10 @@ export default defineSchema({
   })
     .index("by_user_and_startup", ["userId", "startupName"])
     .index("by_user_and_added_date", ["userId", "addedAt"]),
+
+  pendingAnalyses: defineTable({
+    startupName: v.string(),
+    userId: v.id("users"),
+    createdAt: v.number(),
+  }).index("by_startup", ["startupName"]),
 });
