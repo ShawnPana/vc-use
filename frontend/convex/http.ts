@@ -56,7 +56,29 @@ http.route({
         data: JSON.stringify(scrapedData),
       });
 
-      console.log(`[full-analysis-callback] Stored data, now triggering deep research for ${startupName}`);
+      console.log(`[full-analysis-callback] Stored data, now running agent analyses for ${startupName}`);
+
+      // Run agent analyses with the scraped data
+      const activeAgents = await ctx.runQuery(api.queries.getActiveAgents);
+      const scrapedDataString = JSON.stringify(scrapedData);
+
+      for (const agent of activeAgents) {
+        await ctx.runAction(api.actions.analyzeWithCerebras, {
+          startupName,
+          agentId: agent.agentId,
+          agentName: agent.name,
+          agentPrompt: agent.prompt,
+          scrapedData: scrapedDataString,
+        });
+      }
+
+      // Generate summaries
+      await ctx.runAction(api.actions.generateSummaries, {
+        startupName,
+        scrapedData: scrapedDataString,
+      });
+
+      console.log(`[full-analysis-callback] Completed agent analyses, now triggering deep research for ${startupName}`);
 
       // Automatically trigger deep research with callback
       await ctx.runAction(api.actions.runDeepResearch, {
