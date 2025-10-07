@@ -111,12 +111,6 @@ function MainApp() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [hasShownSummary, setHasShownSummary] = useState(false);
 
-  // Derived loading states based on data presence
-  const hasFounders = parsedScrapedData?.founders && parsedScrapedData.founders.length > 0;
-  const hasCompetitors = parsedScrapedData?.competitors && parsedScrapedData.competitors.length > 0;
-  const isEnrichingFounders = hasFounders && parsedScrapedData.founders.some((f: any) => !f.bio || f.bio === "None");
-  const isDeepResearching = (isAnalyzing || isRerunning) && hasFounders && !hasCompetitors;
-
   const { signOut } = useAuthActions();
 
   // Set searched startup from URL parameter on mount
@@ -234,6 +228,11 @@ function MainApp() {
 
   const competitors = parsedScrapedData?.competitors || [];
   const hasCompetitors = competitors.length > 0;
+
+  // Derived loading states based on data presence
+  const hasFounders = parsedScrapedData?.founders && parsedScrapedData.founders.length > 0;
+  const isEnrichingFounders = hasFounders && parsedScrapedData.founders.some((f: any) => !f.bio || f.bio === "None");
+  const isDeepResearching = (isAnalyzing || isRerunning) && hasFounders && !hasCompetitors;
 
   const recentNewsItems = useMemo(() => {
     if (!hypeRecentNews) {
