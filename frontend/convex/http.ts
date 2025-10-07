@@ -62,7 +62,11 @@ http.route({
       const activeAgents = await ctx.runQuery(api.queries.getActiveAgents);
       const scrapedDataString = JSON.stringify(scrapedData);
 
-      for (const agent of activeAgents) {
+      // Run agents sequentially with rate limiting delays (same as old implementation)
+      const RATE_LIMIT_DELAY_MS = 500;
+      const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+      for (const [index, agent] of activeAgents.entries()) {
         await ctx.runAction(api.actions.analyzeWithCerebras, {
           startupName,
           agentId: agent.agentId,
@@ -70,6 +74,11 @@ http.route({
           agentPrompt: agent.prompt,
           scrapedData: scrapedDataString,
         });
+
+        // Add delay between agents to avoid rate limits (except after last agent)
+        if (index < activeAgents.length - 1) {
+          await sleep(RATE_LIMIT_DELAY_MS);
+        }
       }
 
       // Generate summaries
