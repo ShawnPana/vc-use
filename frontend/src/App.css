@@ -269,8 +269,7 @@
   flex-direction: column;
   gap: 1.25rem;
   flex: 0 0 auto;
-  min-height: 0;
-  max-height: clamp(12rem, 35vh, 16rem);
+  height: clamp(12rem, 35vh, 16rem);
 }
 
 .agent-card__header {

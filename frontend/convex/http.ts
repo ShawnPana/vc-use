@@ -221,7 +221,36 @@ http.route({
         scrapedData: JSON.stringify(updatedScrapedData),
       });
 
-      console.log(`[deep-research-callback] Successfully processed data for ${startupName}`);
+      console.log(`[deep-research-callback] Summaries regenerated, now re-running agents with enriched data for ${startupName}`);
+
+      // Re-run agents with enriched data (LinkedIn, Twitter, bios, competitor descriptions)
+      const activeAgents = await ctx.runQuery(api.queries.getAgentsByUserId, {
+        userId,
+      });
+
+      const scrapedDataString = JSON.stringify(updatedScrapedData);
+
+      // Run agents sequentially with rate limiting delays
+      const RATE_LIMIT_DELAY_MS = 500;
+      const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+      for (const [index, agent] of activeAgents.filter((a: any) => a.isActive).entries()) {
+        await ctx.runAction(api.actions.analyzeWithCerebrasAsUser, {
+          userId,
+          startupName,
+          agentId: agent.agentId,
+          agentName: agent.name,
+          agentPrompt: agent.prompt,
+          scrapedData: scrapedDataString,
+        });
+
+        // Add delay between agents to avoid rate limits (except after last agent)
+        if (index < activeAgents.filter((a: any) => a.isActive).length - 1) {
+          await sleep(RATE_LIMIT_DELAY_MS);
+        }
+      }
+
+      console.log(`[deep-research-callback] Successfully processed data and re-ran agents for ${startupName}`);
 
       return new Response(JSON.stringify({ success: true }), {
         status: 200,
