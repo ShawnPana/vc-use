@@ -58,6 +58,16 @@ export const scrapeStartupData = action({
         const data = await response.json();
         console.log(`[scrapeStartupData] Backend response data:`, data);
         console.log(`[scrapeStartupData] Successfully triggered async full analysis with callback to ${callbackUrl}`);
+
+        // Store task ID and status from backend response
+        if (data.task_id) {
+          await ctx.runMutation(api.mutations.updateTaskStatus, {
+            startupName: args.startupName,
+            taskId: data.task_id,
+            taskStatus: data.status || "queued",
+          });
+          console.log(`[scrapeStartupData] Stored task ID ${data.task_id} with status ${data.status}`);
+        }
       } catch (error) {
         console.error(`[scrapeStartupData] Failed to trigger async full analysis:`, error);
         throw new Error(`Failed to contact backend: ${error instanceof Error ? error.message : String(error)}`);

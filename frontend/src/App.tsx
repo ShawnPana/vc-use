@@ -206,6 +206,10 @@ function MainApp() {
     api.queries.isInPortfolio,
     searchedStartup ? { startupName: searchedStartup } : "skip"
   );
+  const taskStatus = useQuery(
+    api.queries.getTaskStatus,
+    searchedStartup ? { startupName: searchedStartup } : "skip"
+  );
   const dbAgents = useQuery(api.queries.getAgents);
 
   const parsedScrapedData = useMemo(() => {
@@ -282,6 +286,12 @@ function MainApp() {
   const handleAnalyze = async () => {
     if (!startupName.trim()) return;
 
+    // Check if task is already queued or processing
+    if (taskStatus?.taskStatus === "queued" || taskStatus?.taskStatus === "processing") {
+      setErrorMessage("Analysis is already in progress for this company. Please wait.");
+      return;
+    }
+
     setSearchedStartup(startupName);
     void navigate(`/company/${encodeURIComponent(startupName)}`, { state: { from: '/' } });
     setIsAnalyzing(true);
@@ -318,6 +328,12 @@ function MainApp() {
 
   const handleRerun = async () => {
     if (!searchedStartup) return;
+
+    // Check if task is already queued or processing
+    if (taskStatus?.taskStatus === "queued" || taskStatus?.taskStatus === "processing") {
+      setErrorMessage("Analysis is already in progress for this company. Please wait.");
+      return;
+    }
 
     setIsRerunning(true);
     setErrorMessage(null);
@@ -623,9 +639,10 @@ function MainApp() {
                 onClick={() => {
                   void handleAnalyze();
                 }}
-                disabled={!startupName.trim() || isAnalyzing}
+                disabled={!startupName.trim() || isAnalyzing || taskStatus?.taskStatus === "queued" || taskStatus?.taskStatus === "processing"}
               >
-                {isAnalyzing ? "Analyzing..." : "Analyze"}
+                {isAnalyzing ? "Analyzing..." :
+                 (taskStatus?.taskStatus === "queued" || taskStatus?.taskStatus === "processing") ? "In Progress..." : "Analyze"}
               </button>
             </div>
 
@@ -700,13 +717,13 @@ function MainApp() {
 
               <button
                 onClick={() => void handleRerun()}
-                disabled={isRerunning}
+                disabled={isRerunning || taskStatus?.taskStatus === "queued" || taskStatus?.taskStatus === "processing"}
                 style={{
                   background: "var(--color-card)",
                   border: "1px solid var(--color-border)",
                   borderRadius: "0.5rem",
                   padding: "0.625rem 1rem",
-                  cursor: isRerunning ? "not-allowed" : "pointer",
+                  cursor: (isRerunning || taskStatus?.taskStatus === "queued" || taskStatus?.taskStatus === "processing") ? "not-allowed" : "pointer",
                   color: "var(--color-foreground)",
                   fontSize: "0.9rem",
                   fontWeight: 500,
@@ -714,10 +731,10 @@ function MainApp() {
                   alignItems: "center",
                   gap: "0.5rem",
                   transition: "all 0.2s",
-                  opacity: isRerunning ? 0.6 : 1,
+                  opacity: (isRerunning || taskStatus?.taskStatus === "queued" || taskStatus?.taskStatus === "processing") ? 0.6 : 1,
                 }}
                 onMouseEnter={(e) => {
-                  if (!isRerunning) {
+                  if (!isRerunning && taskStatus?.taskStatus !== "queued" && taskStatus?.taskStatus !== "processing") {
                     e.currentTarget.style.background = "var(--color-foreground)";
                     e.currentTarget.style.color = "var(--color-background)";
                   }
@@ -726,7 +743,7 @@ function MainApp() {
                   e.currentTarget.style.background = "var(--color-card)";
                   e.currentTarget.style.color = "var(--color-foreground)";
                 }}
-                title="Refresh analysis with latest data"
+                title={taskStatus?.taskStatus === "queued" || taskStatus?.taskStatus === "processing" ? "Task is currently in progress" : "Refresh analysis with latest data"}
               >
                 <RefreshCw size={16} className={isRerunning ? "animate-spin" : ""} />
                 {isRerunning ? "Refreshing..." : "Refresh"}
@@ -805,7 +822,25 @@ function MainApp() {
                     )}
                   </div>
                 </div>
-                <h2 className="dashboard__headline-title">{searchedStartup}</h2>
+                <h2 className="dashboard__headline-title">
+                  {searchedStartup}
+                  {taskStatus?.taskStatus && (taskStatus.taskStatus === "queued" || taskStatus.taskStatus === "processing") && (
+                    <span
+                      style={{
+                        marginLeft: "1rem",
+                        padding: "0.25rem 0.75rem",
+                        borderRadius: "1rem",
+                        fontSize: "0.75rem",
+                        fontWeight: "500",
+                        backgroundColor: taskStatus.taskStatus === "queued" ? "#fef3c7" : "#dbeafe",
+                        color: taskStatus.taskStatus === "queued" ? "#92400e" : "#1e40af",
+                        border: taskStatus.taskStatus === "queued" ? "1px solid #fbbf24" : "1px solid #60a5fa",
+                      }}
+                    >
+                      {taskStatus.taskStatus === "queued" ? "🟡 Queued" : "🔵 Processing"}
+                    </span>
+                  )}
+                </h2>
                 <div
                   className="dashboard__headline-subtitle"
                   style={{

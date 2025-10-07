@@ -147,3 +147,30 @@ export const getScrapedDataByUserId = query({
       .first();
   },
 });
+
+export const getTaskStatus = query({
+  args: {
+    startupName: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) {
+      return null;
+    }
+
+    const scrapedData = await ctx.db
+      .query("scrapedData")
+      .withIndex("by_user_and_startup", (q) => q.eq("userId", userId).eq("startupName", args.startupName))
+      .first();
+
+    if (!scrapedData) {
+      return null;
+    }
+
+    return {
+      taskId: scrapedData.taskId,
+      taskStatus: scrapedData.taskStatus,
+      taskUpdatedAt: scrapedData.taskUpdatedAt,
+    };
+  },
+});
