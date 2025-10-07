@@ -104,6 +104,8 @@ function MainApp() {
   const [searchedStartup, setSearchedStartup] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isRerunning, setIsRerunning] = useState(false);
+  const [isDeepResearching, setIsDeepResearching] = useState(false);
+  const [isEnrichingFounders, setIsEnrichingFounders] = useState(false);
   const [showAddAgentModal, setShowAddAgentModal] = useState(false);
   const [showPortfolio, setShowPortfolio] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
@@ -228,10 +230,6 @@ function MainApp() {
 
   const competitors = parsedScrapedData?.competitors || [];
   const hasCompetitors = competitors.length > 0;
-
-  // Loading states for founder story and competitive landscape
-  const [isDeepResearching, setIsDeepResearching] = useState(false);
-  const [isEnrichingFounders, setIsEnrichingFounders] = useState(false);
 
   const recentNewsItems = useMemo(() => {
     if (!hypeRecentNews) {
