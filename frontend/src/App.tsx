@@ -290,6 +290,10 @@ function MainApp() {
     setIsAnalyzing(true);
     setErrorMessage(null);
 
+    // Set loading states for founder story and competitive landscape
+    setIsEnrichingFounders(true);
+    setIsDeepResearching(true);
+
     try {
       // Run initial analysis (company + hype)
       // The callback will automatically trigger deep research when ready
@@ -321,10 +325,15 @@ function MainApp() {
     setIsRerunning(true);
     setErrorMessage(null);
 
+    // Set loading states for founder story and competitive landscape
+    setIsEnrichingFounders(true);
+    setIsDeepResearching(true);
+
     try {
       // Always re-scrape and re-analyze
       // The callback will automatically trigger deep research when ready
       await rerunAnalysis({ startupName: searchedStartup });
+      // Don't set isRerunning to false here - let it be handled by useEffect when data loads
     } catch (error) {
       console.error("Rerun error:", error);
       let message = "Failed to refresh analysis. Please try again.";
@@ -334,8 +343,9 @@ function MainApp() {
       }
 
       setErrorMessage(message);
-    } finally {
       setIsRerunning(false);
+      setIsEnrichingFounders(false);
+      setIsDeepResearching(false);
     }
   };
 
@@ -384,6 +394,51 @@ function MainApp() {
   useEffect(() => {
     setHasShownSummary(false);
   }, [searchedStartup]);
+
+  // Auto-disable loading states when summaries and competitors are loaded
+  useEffect(() => {
+    if (!searchedStartup) return;
+
+    const founderStory = summaries?.find((s) => s.summaryType === "founder_story");
+    const competitiveLandscape = summaries?.find((s) => s.summaryType === "competitive_landscape");
+    const companyOverview = summaries?.find((s) => s.summaryType === "company_overview");
+
+    // Turn off isRerunning when basic summaries are regenerated (company_overview exists)
+    if (isRerunning && scrapedData !== undefined && companyOverview && companyOverview.content) {
+      console.log("[App] Company overview regenerated, disabling isRerunning");
+      setIsRerunning(false);
+    }
+
+    // Turn off isEnrichingFounders when founder_story summary exists AND is valid
+    if (founderStory && founderStory.content && isEnrichingFounders) {
+      const storyLower = founderStory.content.toLowerCase();
+      const isGenericPlaceholder = storyLower.includes("united by a shared vision") ||
+                                   storyLower.includes("bring their unique perspectives") ||
+                                   storyLower.includes("dynamic trio") ||
+                                   storyLower.includes("poised to drive growth");
+
+      const hasValidStory = founderStory.content !== '""' &&
+                           founderStory.content.trim() !== "" &&
+                           founderStory.content !== 'None' &&
+                           !storyLower.includes("unfortunately") &&
+                           !storyLower.includes("although detailed biographies") &&
+                           !storyLower.includes("not available") &&
+                           !isGenericPlaceholder;
+
+      if (hasValidStory) {
+        console.log("[App] Founder story loaded, disabling isEnrichingFounders");
+        setIsEnrichingFounders(false);
+      } else {
+        console.log("[App] Founder story exists but failed validation:", founderStory.content.substring(0, 100));
+      }
+    }
+
+    // Turn off isDeepResearching when competitive_landscape summary exists and competitors are present
+    if (competitiveLandscape && competitiveLandscape.content && hasCompetitors && isDeepResearching) {
+      console.log("[App] Competitive landscape loaded with competitors, disabling isDeepResearching");
+      setIsDeepResearching(false);
+    }
+  }, [summaries, hasCompetitors, isEnrichingFounders, isDeepResearching, searchedStartup, scrapedData, isRerunning]);
 
   // Show portfolio page
   if (showPortfolio) {
@@ -761,8 +816,8 @@ function MainApp() {
                     display: "block",
                   }}
                 >
-                  {getSummaryContent("company_overview") ||
-                    "Concise overview pending. Agents are compiling the company snapshot."}
+                  {isRerunning ? "Refreshing company overview..." : (getSummaryContent("company_overview") ||
+                    "Concise overview pending. Agents are compiling the company snapshot.")}
                 </div>
               </div>
 
@@ -802,7 +857,26 @@ function MainApp() {
                 </button>
               </div>
               <div className="dashboard__tile-body dashboard__tile-body--scroll">
-                {parsedScrapedData?.founders && parsedScrapedData.founders.length > 0 ? (
+                {isRerunning || isEnrichingFounders && (!parsedScrapedData?.founders || parsedScrapedData.founders.length === 0) ? (
+                  <div style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "2rem",
+                    textAlign: "center",
+                    gap: "1rem"
+                  }}>
+                    <RefreshCw size={24} className="animate-spin" style={{ color: "var(--color-muted-foreground)" }} />
+                    <p style={{
+                      margin: 0,
+                      fontSize: "0.9rem",
+                      color: "var(--color-muted-foreground)"
+                    }}>
+                      {isRerunning ? "Refreshing founder data..." : "Enriching founder profiles and researching backgrounds..."}
+                    </p>
+                  </div>
+                ) : parsedScrapedData?.founders && parsedScrapedData.founders.length > 0 ? (
                   <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
                     <div>
                       <h4 style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--color-foreground)", marginBottom: "0.5rem" }}>Founder Names</h4>
@@ -823,7 +897,7 @@ function MainApp() {
                               )}
                             </div>
                           )}
-                          {isEnrichingFounders && (
+                          {isEnrichingFounders && !isRerunning && (
                             <div className="loading-dots" style={{ display: "flex", gap: "0.15rem" }}>
                               <span style={{ width: "4px", height: "4px", borderRadius: "50%", background: "var(--color-primary)", animation: "blink 1.4s infinite both" }}></span>
                               <span style={{ width: "4px", height: "4px", borderRadius: "50%", background: "var(--color-primary)", animation: "blink 1.4s infinite both", animationDelay: "0.2s" }}></span>
@@ -834,10 +908,6 @@ function MainApp() {
                       ))}
                     </div>
                     {(() => {
-                      if (isEnrichingFounders) {
-                        return <p className="dashboard__placeholder" style={{ paddingTop: "0.25rem" }}>Founder stories are loading...</p>;
-                      }
-
                       const founderStory = getSummaryContent("founder_story");
                       const storyLower = founderStory?.toLowerCase() || "";
                       const hasValidStory = founderStory &&
@@ -854,8 +924,6 @@ function MainApp() {
                       return null;
                     })()}
                   </div>
-                ) : isEnrichingFounders || isSummariesLoading ? (
-                  <p className="dashboard__placeholder">Researching founding team…</p>
                 ) : (
                   <p className="dashboard__placeholder">No founder insights collected yet.</p>
                 )}
@@ -896,9 +964,23 @@ function MainApp() {
                 </button>
               </div>
               <div className="dashboard__tile-body" style={{ paddingTop: '0.5rem' }}>
-                <div style={{ height: "220px" }}>
-                  <HypeMetricsChart metrics={hypeMetrics} />
-                </div>
+                {isRerunning ? (
+                  <div style={{
+                    height: "220px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "var(--color-muted-foreground)",
+                    fontSize: "0.9rem"
+                  }}>
+                    <RefreshCw size={20} className="animate-spin" style={{ marginRight: "0.5rem" }} />
+                    Refreshing market data...
+                  </div>
+                ) : (
+                  <div style={{ height: "220px" }}>
+                    <HypeMetricsChart metrics={hypeMetrics} />
+                  </div>
+                )}
               </div>
             </article>
 
@@ -939,7 +1021,7 @@ function MainApp() {
                 )}
               </div>
               <div className="dashboard__tile-body">
-                {isDeepResearching ? (
+                {isDeepResearching || isRerunning ? (
                   <div style={{
                     display: "flex",
                     flexDirection: "column",
@@ -1017,7 +1099,7 @@ function MainApp() {
                     ))}
                   </div>
                 ) : (
-                  <p className="dashboard__placeholder">Researching competitive landscape...</p>
+                  <p className="dashboard__placeholder">No competitor data available yet.</p>
                 )}
               </div>
             </article>
@@ -1056,7 +1138,26 @@ function MainApp() {
                 </button>
               </div>
               <div className="dashboard__tile-body dashboard__tile-body--scroll">
-                {recentNewsItems.length === 0 && !hypeSummarySnippet ? (
+                {isRerunning ? (
+                  <div style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "2rem",
+                    textAlign: "center",
+                    gap: "1rem"
+                  }}>
+                    <RefreshCw size={24} className="animate-spin" style={{ color: "var(--color-muted-foreground)" }} />
+                    <p style={{
+                      margin: 0,
+                      fontSize: "0.9rem",
+                      color: "var(--color-muted-foreground)"
+                    }}>
+                      Refreshing news and traction data...
+                    </p>
+                  </div>
+                ) : recentNewsItems.length === 0 && !hypeSummarySnippet ? (
                   <p className="dashboard__placeholder">No market signals captured yet.</p>
                 ) : (
                   <div style={{ display: "grid", gap: "1.25rem" }}>
@@ -1213,11 +1314,33 @@ function MainApp() {
                 </button>
               </div>
               <div className="dashboard__tile-body" style={{ paddingTop: '1rem' }}>
-                <LatestFundingStat
-                  latestMetric={latestFundingMetric}
-                  metrics={hypeMetrics}
-                  isLoading={isHypeLoading}
-                />
+                {isRerunning ? (
+                  <div style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "2rem",
+                    textAlign: "center",
+                    gap: "1rem",
+                    minHeight: "120px"
+                  }}>
+                    <RefreshCw size={20} className="animate-spin" style={{ color: "var(--color-muted-foreground)" }} />
+                    <p style={{
+                      margin: 0,
+                      fontSize: "0.85rem",
+                      color: "var(--color-muted-foreground)"
+                    }}>
+                      Refreshing funding data...
+                    </p>
+                  </div>
+                ) : (
+                  <LatestFundingStat
+                    latestMetric={latestFundingMetric}
+                    metrics={hypeMetrics}
+                    isLoading={isHypeLoading}
+                  />
+                )}
               </div>
             </article>
 

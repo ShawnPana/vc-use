@@ -485,7 +485,17 @@ export const clearAnalysesAndSummaries = mutation({
       await ctx.db.delete(summary._id);
     }
 
-    console.log(`Cleared ${analyses.length} analyses and ${summaries.length} summaries for ${args.startupName}`);
+    // Delete scraped data for this startup
+    const scrapedData = await ctx.db
+      .query("scrapedData")
+      .withIndex("by_user_and_startup", (q) => q.eq("userId", userId).eq("startupName", args.startupName))
+      .collect();
+
+    for (const data of scrapedData) {
+      await ctx.db.delete(data._id);
+    }
+
+    console.log(`Cleared ${analyses.length} analyses, ${summaries.length} summaries, and ${scrapedData.length} scraped data for ${args.startupName}`);
   },
 });
 
