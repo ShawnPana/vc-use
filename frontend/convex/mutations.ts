@@ -4,13 +4,6 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 
 const DEFAULT_AGENTS = [
   {
-    id: "diligence",
-    name: "Due Diligence",
-    prompt: "You are a legal and compliance analyst conducting due diligence on this startup. Provide your analysis in numbered sections:\n\n1. RED FLAGS: Identify any legal, regulatory, or compliance concerns\n2. GOVERNANCE: Evaluate corporate structure and governance practices\n3. REGULATORY LANDSCAPE: Assess industry-specific regulations and licensing\n4. IP & CONTRACTS: Review intellectual property and key agreements\n5. RISK ASSESSMENT: Summarize key legal and compliance risks",
-    icon: "diligence",
-    accent: "#ef4444",
-  },
-  {
     id: "financial",
     name: "Financial Analysis",
     prompt: "You are a financial analyst evaluating this startup's business model and unit economics. Provide your analysis in numbered sections:\n\n1. BUSINESS MODEL: Analyze revenue streams and cost structure\n2. UNIT ECONOMICS: Evaluate CAC, LTV, margins, and payback period\n3. BURN RATE & RUNWAY: Assess current financial position\n4. GROWTH METRICS: Analyze growth rates and efficiency\n5. FINANCIAL OUTLOOK: Provide overall financial assessment",
@@ -44,6 +37,13 @@ const DEFAULT_AGENTS = [
     prompt: "You are a technical due diligence specialist evaluating this startup's technology. Provide your analysis in numbered sections:\n\n1. TECHNICAL ARCHITECTURE: Assess technology stack and infrastructure\n2. PRODUCT DIFFERENTIATION: Evaluate technical innovation and uniqueness\n3. SCALABILITY: Analyze ability to scale technically\n4. TECHNICAL RISKS: Identify technical debt and risks\n5. TECHNICAL OUTLOOK: Provide overall technology assessment",
     icon: "tech",
     accent: "#ec4899",
+  },
+  {
+    id: "diligence",
+    name: "Due Diligence",
+    prompt: "You are a legal and compliance analyst conducting due diligence on this startup. Provide your analysis in numbered sections:\n\n1. RED FLAGS: Identify any legal, regulatory, or compliance concerns\n2. GOVERNANCE: Evaluate corporate structure and governance practices\n3. REGULATORY LANDSCAPE: Assess industry-specific regulations and licensing\n4. IP & CONTRACTS: Review intellectual property and key agreements\n5. RISK ASSESSMENT: Summarize key legal and compliance risks",
+    icon: "diligence",
+    accent: "#ef4444",
   },
 ];
 
