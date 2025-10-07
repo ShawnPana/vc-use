@@ -1,4 +1,4 @@
-import { query } from "./_generated/server";
+import { query, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
@@ -45,6 +45,18 @@ export const getScrapedData = query({
     const data = await ctx.db
       .query("scrapedData")
       .withIndex("by_user_and_startup", (q) => q.eq("userId", userId).eq("startupName", args.startupName))
+      .first();
+    return data;
+  },
+});
+
+// Internal query for callback to fetch scraped data by userId + startupName without auth
+export const getScrapedDataInternal = internalQuery({
+  args: { userId: v.id("users"), startupName: v.string() },
+  handler: async (ctx, args) => {
+    const data = await ctx.db
+      .query("scrapedData")
+      .withIndex("by_user_and_startup", (q) => q.eq("userId", args.userId).eq("startupName", args.startupName))
       .first();
     return data;
   },

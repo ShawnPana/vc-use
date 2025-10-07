@@ -1,4 +1,4 @@
-import { mutation } from "./_generated/server";
+import { mutation, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
@@ -168,6 +168,36 @@ export const storeScrapedData = mutation({
 
     return await ctx.db.insert("scrapedData", {
       userId,
+      startupName: args.startupName,
+      data: args.data,
+      timestamp: Date.now(),
+    });
+  },
+});
+
+// Internal mutation for callback to store scraped data with userId
+export const storeScrapedDataInternal = internalMutation({
+  args: {
+    userId: v.id("users"),
+    startupName: v.string(),
+    data: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("scrapedData")
+      .withIndex("by_user_and_startup", (q) => q.eq("userId", args.userId).eq("startupName", args.startupName))
+      .first();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        data: args.data,
+        timestamp: Date.now(),
+      });
+      return existing._id;
+    }
+
+    return await ctx.db.insert("scrapedData", {
+      userId: args.userId,
       startupName: args.startupName,
       data: args.data,
       timestamp: Date.now(),

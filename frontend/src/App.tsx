@@ -290,11 +290,12 @@ function MainApp() {
       await analyzeStartup({ startupName, debug: debugMode });
 
       // After initial analysis completes, automatically run deep research (founders + competitors) in background
+      // Note: Deep research uses async callback, so loading states will remain until callback completes
       setIsDeepResearching(true);
       setIsEnrichingFounders(true);
       runDeepResearch({ startupName }).catch((error) => {
         console.error("Failed to run deep research:", error);
-      }).finally(() => {
+        // Only turn off loading on error
         setIsDeepResearching(false);
         setIsEnrichingFounders(false);
       });
@@ -330,11 +331,12 @@ function MainApp() {
       await rerunAnalysis({ startupName: searchedStartup });
 
       // Automatically run deep research after refresh
+      // Note: Deep research uses async callback, so loading states will remain until callback completes
       setIsDeepResearching(true);
       setIsEnrichingFounders(true);
-      await runDeepResearch({ startupName: searchedStartup }).catch((error) => {
+      runDeepResearch({ startupName: searchedStartup }).catch((error) => {
         console.error("Failed to run deep research:", error);
-      }).finally(() => {
+        // Only turn off loading on error
         setIsDeepResearching(false);
         setIsEnrichingFounders(false);
       });
@@ -397,6 +399,15 @@ function MainApp() {
   useEffect(() => {
     setHasShownSummary(false);
   }, [searchedStartup]);
+
+  // Auto-disable loading states when deep research callback completes (competitors appear)
+  useEffect(() => {
+    if (hasCompetitors && (isDeepResearching || isEnrichingFounders)) {
+      console.log("[App] Deep research callback completed - competitors detected, disabling loading states");
+      setIsDeepResearching(false);
+      setIsEnrichingFounders(false);
+    }
+  }, [hasCompetitors, isDeepResearching, isEnrichingFounders]);
 
   // Show portfolio page
   if (showPortfolio) {

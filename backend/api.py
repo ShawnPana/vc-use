@@ -64,6 +64,8 @@ class FounderResearchRequest(BaseModel):
     founders: FounderList
     company_bio: Optional[str] = None
     company_website: Optional[str] = None
+    callback_url: Optional[str] = None
+    user_id: Optional[str] = None
 
 class CompanyAnalysisResponse(BaseModel):
     success: bool
@@ -323,8 +325,31 @@ async def api_deep_research(
     """
     Deep research on company founders and competitors.
     Runs research_founders and research_competitors in parallel.
-    Returns detailed founder info and competitor list.
+
+    If callback_url is provided, runs asynchronously and POSTs results to callback when complete.
+    Otherwise, waits and returns results synchronously (may timeout for long operations).
     """
+    # If callback URL is provided, run asynchronously
+    if request.callback_url:
+        # Start the research in the background
+        asyncio.create_task(run_deep_research_async(
+            request.company_name,
+            request.founders,
+            request.company_bio,
+            request.company_website,
+            request.callback_url,
+            api_key,
+            request.user_id
+        ))
+
+        # Return immediately
+        return DeepResearchResponse(
+            success=True,
+            founders=FounderList(founders=[]),
+            competitors=CompetitorList(competitors=[])
+        )
+
+    # Synchronous mode (legacy, may timeout)
     try:
         # Run research_founders and research_competitors in parallel
         results = await asyncio.gather(
@@ -348,6 +373,102 @@ async def api_deep_research(
             success=False,
             error=str(e)
         )
+
+# Background task for async deep research with callback
+async def run_deep_research_async(
+    company_name: str,
+    founders: FounderList,
+    company_bio: Optional[str],
+    company_website: Optional[str],
+    callback_url: str,
+    api_key: str,
+    user_id: Optional[str] = None
+):
+    """
+    Run deep research asynchronously and POST results to callback URL when complete.
+    """
+    import httpx
+
+    print(f"[run_deep_research_async] Starting async deep research for {company_name}")
+    print(f"[run_deep_research_async] Will callback to: {callback_url}")
+    print(f"[run_deep_research_async] User ID: {user_id}")
+
+    try:
+        # Run research_founders and research_competitors in parallel
+        results = await asyncio.gather(
+            research_founders(company_name, founders),
+            research_competitors(company_name, company_bio, company_website)
+        )
+
+        (enriched_founders, browser1), (competitors, browser2) = results
+
+        # Stop both browsers after both complete
+        await browser1.stop()
+        await browser2.stop()
+
+        print(f"[run_deep_research_async] Research completed for {company_name}")
+        print(f"[run_deep_research_async] Found {len(enriched_founders.founders)} founders, {len(competitors.competitors)} competitors")
+
+        # Prepare callback payload
+        payload = {
+            "startupName": company_name,
+            "userId": user_id,
+            "founders": {
+                "founders": [
+                    {
+                        "name": f.name,
+                        "social_media": {
+                            "linkedin": f.social_media.linkedin if f.social_media else None,
+                            "X": f.social_media.X if f.social_media else None,
+                        },
+                        "personal_website": f.personal_website,
+                        "bio": f.bio,
+                    }
+                    for f in enriched_founders.founders
+                ]
+            },
+            "competitors": {
+                "competitors": [
+                    {
+                        "name": c.name,
+                        "website": c.website,
+                        "description": c.description,
+                    }
+                    for c in competitors.competitors
+                ]
+            }
+        }
+
+        # POST results to callback URL
+        print(f"[run_deep_research_async] Posting results to callback URL")
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                callback_url,
+                json=payload,
+                headers={"X-API-Key": api_key}
+            )
+
+            if response.status_code == 200:
+                print(f"[run_deep_research_async] Successfully posted results to callback")
+            else:
+                print(f"[run_deep_research_async] Callback failed with status {response.status_code}: {response.text}")
+
+    except Exception as e:
+        print(f"[run_deep_research_async] Error during async research: {e}")
+        import traceback
+        traceback.print_exc()
+
+        # Try to notify callback of error
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                await client.post(
+                    callback_url,
+                    json={"error": str(e), "startupName": company_name},
+                    headers={"X-API-Key": api_key}
+                )
+        except Exception as callback_error:
+            print(f"[run_deep_research_async] Failed to send error to callback: {callback_error}")
 
 if __name__ == "__main__":
     import uvicorn

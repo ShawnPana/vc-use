@@ -3,6 +3,7 @@
 import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
 const RATE_LIMIT_DELAY_MS = 500;
 
@@ -191,6 +192,13 @@ export const runDeepResearch = action({
     }
 
     try {
+      // Get userId for the callback
+      const userId = await getAuthUserId(ctx);
+      if (!userId) {
+        throw new Error("Must be authenticated to run deep research");
+      }
+      console.log(`[runDeepResearch] User ID: ${userId}`);
+
       // Get the current scraped data to extract founder names
       const scrapedData = await ctx.runQuery(api.queries.getScrapedData, {
         startupName: args.startupName,
@@ -210,120 +218,70 @@ export const runDeepResearch = action({
       }
 
       // Check if deep research has already been run
+      // Deep research is complete only if we have BOTH enriched founders AND competitors
       const hasCompetitors = parsedData.competitors && parsedData.competitors.length > 0;
-      const foundersAlreadyEnriched = founders.every((f: any) => f.bio && f.bio !== "None");
 
-      if (hasCompetitors && foundersAlreadyEnriched) {
-        console.log("[runDeepResearch] Deep research already completed, skipping");
+      if (hasCompetitors) {
+        console.log("[runDeepResearch] Deep research already completed (competitors found), skipping");
         return { success: true, message: "Deep research already completed" };
       }
 
-      console.log(`[runDeepResearch] Calling /api/deep-research endpoint`);
-      // Call backend deep-research endpoint
-      const response = await fetch(`${backendUrl}/api/deep-research`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-API-Key": apiKey,
-        },
-        body: JSON.stringify({
-          company_name: args.startupName,
-          company_bio: parsedData.companyBio || parsedData.company_bio || null,
-          company_website: parsedData.companyWebsite || parsedData.company_website || null,
-          founders: {
-            founders: founders.map((f: any) => ({
-              name: f.name,
-              social_media: {
-                linkedin: f.linkedin || "None",
-                X: f.twitter || "None",
-                other: "None",
-              },
-              personal_website: f.personalWebsite || "None",
-              bio: f.bio || "None",
-            })),
+      console.log("[runDeepResearch] Deep research needed - missing competitors");
+
+      console.log(`[runDeepResearch] Calling /api/deep-research endpoint (async mode with callback)`);
+
+      // Get the Convex deployment URL for the callback
+      const convexSiteUrl = process.env.CONVEX_SITE_URL;
+      if (!convexSiteUrl) {
+        throw new Error("CONVEX_SITE_URL not configured");
+      }
+
+      const callbackUrl = `${convexSiteUrl}/deep-research-callback`;
+      console.log(`[runDeepResearch] Callback URL: ${callbackUrl}`);
+
+      // Call backend deep-research endpoint with callback URL
+      // We await the initial request but the backend returns immediately
+      // The backend will then do the actual research and call us back when done
+      try {
+        await fetch(`${backendUrl}/api/deep-research`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-API-Key": apiKey,
           },
-        }),
-      });
-
-      console.log(`[runDeepResearch] API response status: ${response.status}`);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[runDeepResearch] API error: ${response.status} - ${errorText}`);
-        throw new Error(`Backend API error: ${response.status} ${errorText}`);
+          body: JSON.stringify({
+            company_name: args.startupName,
+            company_bio: parsedData.companyBio || parsedData.company_bio || null,
+            company_website: parsedData.companyWebsite || parsedData.companyWebsite || parsedData.company_website || null,
+            callback_url: callbackUrl,
+            user_id: userId,
+            founders: {
+              founders: founders.map((f: any) => ({
+                name: f.name,
+                social_media: {
+                  linkedin: f.linkedin || "None",
+                  X: f.twitter || "None",
+                  other: "None",
+                },
+                personal_website: f.personalWebsite || "None",
+                bio: f.bio || "None",
+              })),
+            },
+          }),
+        });
+        console.log(`[runDeepResearch] Successfully triggered async deep research with callback to ${callbackUrl}`);
+        console.log(`[runDeepResearch] Backend will call back when research completes (typically 3-5 minutes)`);
+      } catch (error) {
+        console.error(`[runDeepResearch] Failed to trigger async deep research:`, error);
+        throw new Error(`Failed to start deep research: ${error}`);
       }
 
-      const result = await response.json();
-
-      if (!result.success) {
-        console.error(`[runDeepResearch] Backend returned success=false: ${result.error}`);
-        throw new Error(result.error || "Deep research failed");
-      }
-
-      console.log(`[runDeepResearch] Successfully received enriched data`);
-
-      // Update the scraped data with enriched founders and competitors
-      const enrichedFounders = result.founders.founders.map((f: any) => ({
-        name: f.name,
-        linkedin: f.social_media?.linkedin,
-        twitter: f.social_media?.X,
-        personalWebsite: f.personal_website,
-        bio: f.bio,
-      }));
-
-      const competitors = result.competitors.competitors.map((c: any) => ({
-        name: c.name,
-        website: c.website,
-        description: c.description,
-      }));
-
-      console.log(`[runDeepResearch] Enriched ${enrichedFounders.length} founders, found ${competitors.length} competitors`);
-
-      const updatedScrapedData = {
-        ...parsedData,
-        founders: enrichedFounders,
-        competitors: competitors,
+      // Return immediately - the backend will call us back when done
+      return {
+        success: true,
+        message: "Deep research started. Founder Story and Competitive Landscape will populate when research completes (typically 3-5 minutes).",
+        async: true
       };
-
-      // Store the updated scraped data
-      console.log(`[runDeepResearch] Storing updated scraped data`);
-      await ctx.runMutation(api.mutations.storeScrapedData, {
-        startupName: args.startupName,
-        data: JSON.stringify(updatedScrapedData),
-      });
-
-      const updatedScrapedDataString = JSON.stringify(updatedScrapedData);
-
-      // Get active agents to re-analyze with enriched data
-      const activeAgents = await ctx.runQuery(api.queries.getActiveAgents);
-      console.log(`[runDeepResearch] Re-analyzing with ${activeAgents.length} agents`);
-
-      // Re-run all agent analyses with the enriched data
-      for (const [index, agent] of activeAgents.entries()) {
-        try {
-          await ctx.runAction(api.actions.analyzeWithCerebras, {
-            startupName: args.startupName,
-            agentId: agent.agentId,
-            agentName: agent.name,
-            agentPrompt: agent.prompt,
-            scrapedData: updatedScrapedDataString,
-          });
-        } finally {
-          if (index < activeAgents.length - 1) {
-            await sleep(RATE_LIMIT_DELAY_MS);
-          }
-        }
-      }
-
-      // Regenerate summaries with enriched data
-      console.log(`[runDeepResearch] Regenerating summaries`);
-      await ctx.runAction(api.actions.generateSummaries, {
-        startupName: args.startupName,
-        scrapedData: updatedScrapedDataString,
-      });
-
-      console.log(`[runDeepResearch] Completed successfully for ${args.startupName}`);
-      return { success: true, enrichedFounders, competitors };
     } catch (error) {
       console.error(`[runDeepResearch] Error for ${args.startupName}:`, error);
       throw error;
@@ -677,20 +635,29 @@ export const generateSummaries = action({
       .map((f: any) => `${f.name}: ${f.bio || 'Bio not available'}`)
       .join('\n');
 
-    // Only generate founder_story if we have founder information
-    const hasFounderInfo = founders.length > 0 && founderBios.trim().length > 0;
+    // Only generate founder_story if we have enriched founder information
+    // Check that at least one founder has a meaningful bio (not just "Bio not available" or "None")
+    const hasEnrichedFounderInfo = founders.length > 0 &&
+      founders.some((f: any) => f.bio && f.bio !== 'None' && f.bio !== 'Bio not available' && f.bio.trim().length > 20);
+
+    // For market_position, use competitor data if available
+    const competitors = scrapedData.competitors || [];
+    const competitorInfo = competitors.length > 0
+      ? competitors.map((c: any) => `${c.name}: ${c.description || 'No description available'}`).join('\n')
+      : 'No competitor data available yet.';
+    const hasCompetitorInfo = competitors.length > 0;
 
     const summaryTypes = [
-      ...(hasFounderInfo ? [{
+      ...(hasEnrichedFounderInfo ? [{
         type: "founder_story",
         prompt: `Based on the following founder information, create a brief, compelling summary of the founders' background and how they came together to start this company. Focus on their unique experiences and complementary skills. 2-3 sentences max.\n\nIMPORTANT: Always create a positive, insightful summary even if biographical information is limited - focus on the team and their potential. If you truly cannot create any summary at all, respond with exactly the word "None" and nothing else. Do NOT return empty strings, quotes, or apologetic messages like "detailed biographies are not available" or "unfortunately". Be confident and forward-looking.\n\nFounder Information:\n${founderBios}`,
         useDirectData: true,
       }] : []),
-      {
+      ...(hasCompetitorInfo ? [{
         type: "market_position",
-        prompt: "Summarize the company's position in the competitive landscape and their unique differentiation. 2-3 sentences max.",
-        useDirectData: false,
-      },
+        prompt: `Summarize the company's position in the competitive landscape and their unique differentiation compared to competitors. 2-3 sentences max.\n\nCompany Info:\nBio: ${scrapedData.bio || 'Not available'}\nSummary: ${scrapedData.summary || 'Not available'}\n\nCompetitors:\n${competitorInfo}`,
+        useDirectData: true,
+      }] : []),
       {
         type: "funding_outlook",
         prompt: "Provide an assessment of their current funding stage and what they likely need next. 2-3 sentences max.",
