@@ -21,13 +21,13 @@ http.route({
         return new Response("Unauthorized", { status: 401 });
       }
 
-      const { startupName, company, hype } = body;
+      const { startupName, company, hype, taskStatus } = body;
 
       if (!startupName) {
         return new Response("Missing startupName", { status: 400 });
       }
 
-      console.log(`[full-analysis-callback] Received data for ${startupName}`);
+      console.log(`[full-analysis-callback] Received data for ${startupName}, taskStatus: ${taskStatus}`);
 
       // Look up userId from pendingAnalyses
       const pendingAnalysis = await ctx.runQuery(api.queries.getPendingAnalysis, {
@@ -41,6 +41,19 @@ http.route({
 
       const userId = pendingAnalysis.userId;
       console.log(`[full-analysis-callback] Found userId: ${userId}`);
+
+      // If task failed, update status and return
+      if (taskStatus === "failed") {
+        console.log(`[full-analysis-callback] Task failed for ${startupName}`);
+        await ctx.runMutation(api.mutations.updateTaskStatus, {
+          startupName,
+          taskStatus: "failed",
+        });
+        return new Response(JSON.stringify({ success: true, status: "failed" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
 
       // Format and store the scraped data
       const scrapedData = {
@@ -64,12 +77,20 @@ http.route({
           : null,
       };
 
-      // Store scraped data as this user
+      // Store scraped data as this user with taskStatus
       await ctx.runMutation(api.mutations.storeScrapedDataAsUser, {
         userId,
         startupName,
         data: JSON.stringify(scrapedData),
       });
+
+      // Update task status to completed
+      if (taskStatus === "completed") {
+        await ctx.runMutation(api.mutations.updateTaskStatus, {
+          startupName,
+          taskStatus: "completed",
+        });
+      }
 
       console.log(`[full-analysis-callback] Stored data, now running agent analyses for ${startupName}`);
 
@@ -148,13 +169,13 @@ http.route({
         return new Response("Unauthorized", { status: 401 });
       }
 
-      const { startupName, founders, competitors } = body;
+      const { startupName, founders, competitors, taskStatus } = body;
 
       if (!startupName) {
         return new Response("Missing startupName", { status: 400 });
       }
 
-      console.log(`[deep-research-callback] Received data for ${startupName}`);
+      console.log(`[deep-research-callback] Received data for ${startupName}, taskStatus: ${taskStatus}`);
 
       // Look up userId from pendingAnalyses
       const pendingAnalysis = await ctx.runQuery(api.queries.getPendingAnalysis, {
@@ -168,6 +189,15 @@ http.route({
 
       const userId = pendingAnalysis.userId;
       console.log(`[deep-research-callback] Found userId: ${userId}`);
+
+      // If task failed, just log and return (task status was already updated by full-analysis)
+      if (taskStatus === "failed") {
+        console.log(`[deep-research-callback] Deep research task failed for ${startupName}`);
+        return new Response(JSON.stringify({ success: true, status: "failed" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
 
       // Get current scraped data
       const scrapedData = await ctx.runQuery(api.queries.getScrapedDataByUserId, {
