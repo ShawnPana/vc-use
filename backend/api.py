@@ -60,6 +60,7 @@ class CompanyAnalysisRequest(BaseModel):
     company_name: str
     debug: Optional[bool] = False
     callback_url: Optional[str] = None
+    user_id: Optional[str] = None
 
 class FounderResearchRequest(BaseModel):
     company_name: str
@@ -67,6 +68,7 @@ class FounderResearchRequest(BaseModel):
     company_bio: Optional[str] = None
     company_website: Optional[str] = None
     callback_url: Optional[str] = None
+    user_id: Optional[str] = None
 
 class CompanyAnalysisResponse(BaseModel):
     success: bool
@@ -320,6 +322,7 @@ async def api_full_analysis(
                         request.callback_url,
                         json={
                             "startupName": request.company_name,
+                            "userId": request.user_id,
                             "company": company.model_dump(),
                             "hype": hype.model_dump()
                         },
@@ -380,6 +383,7 @@ async def api_deep_research(
                         request.callback_url,
                         json={
                             "startupName": request.company_name,
+                            "userId": request.user_id,
                             "founders": founders.model_dump(),
                             "competitors": competitors.model_dump()
                         },
