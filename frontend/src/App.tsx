@@ -104,8 +104,6 @@ function MainApp() {
   const [searchedStartup, setSearchedStartup] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isRerunning, setIsRerunning] = useState(false);
-  const [isDeepResearching, setIsDeepResearching] = useState(false);
-  const [isEnrichingFounders, setIsEnrichingFounders] = useState(false);
   const [showAddAgentModal, setShowAddAgentModal] = useState(false);
   const [showPortfolio, setShowPortfolio] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
@@ -159,8 +157,6 @@ function MainApp() {
 
   const analyzeStartup = useAction(api.actions.analyzeStartup);
   const rerunAnalysis = useAction(api.actions.rerunAnalysis);
-  const enrichFounderInfo = useAction(api.actions.enrichFounderInfo);
-  const runDeepResearch = useAction(api.actions.runDeepResearch);
   const initializeMyAgents = useMutation(api.mutations.initializeMyAgents);
   const addToPortfolioMutation = useMutation(api.mutations.addToPortfolio);
   const removeFromPortfolioMutation = useMutation(api.mutations.removeFromPortfolio);
