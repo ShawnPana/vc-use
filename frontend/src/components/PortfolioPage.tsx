@@ -12,10 +12,13 @@ export function PortfolioPage({ onSelectCompany, onBack }: PortfolioPageProps) {
 
   return (
     <div style={{
-      minHeight: "100vh",
+      height: "100vh",
       padding: "2rem",
       maxWidth: "1200px",
       margin: "0 auto",
+      display: "flex",
+      flexDirection: "column",
+      overflow: "hidden",
     }}>
       {/* Header */}
       <div style={{
@@ -23,6 +26,7 @@ export function PortfolioPage({ onSelectCompany, onBack }: PortfolioPageProps) {
         alignItems: "center",
         justifyContent: "space-between",
         marginBottom: "2rem",
+        flexShrink: 0,
       }}>
         <button
           onClick={onBack}
@@ -63,25 +67,30 @@ export function PortfolioPage({ onSelectCompany, onBack }: PortfolioPageProps) {
       </div>
 
       {/* Content */}
-      {!portfolioCompanies || portfolioCompanies.length === 0 ? (
-        <div style={{
-          textAlign: "center",
-          padding: "6rem 2rem",
-          color: "var(--color-muted-foreground)",
-        }}>
-          <h2 style={{ fontSize: "1.75rem", marginBottom: "0.75rem", fontWeight: 600 }}>
-            No companies in portfolio yet
-          </h2>
-          <p style={{ fontSize: "1.1rem", opacity: 0.8 }}>
-            Analyze a startup and add it to your portfolio to track it here.
-          </p>
-        </div>
-      ) : (
-        <div style={{
-          display: "grid",
-          gap: "1.25rem",
-          gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))",
-        }}>
+      <div style={{
+        flex: 1,
+        overflowY: "auto",
+        overflowX: "hidden",
+      }}>
+        {!portfolioCompanies || portfolioCompanies.length === 0 ? (
+          <div style={{
+            textAlign: "center",
+            padding: "6rem 2rem",
+            color: "var(--color-muted-foreground)",
+          }}>
+            <h2 style={{ fontSize: "1.75rem", marginBottom: "0.75rem", fontWeight: 600 }}>
+              No companies in portfolio yet
+            </h2>
+            <p style={{ fontSize: "1.1rem", opacity: 0.8 }}>
+              Analyze a startup and add it to your portfolio to track it here.
+            </p>
+          </div>
+        ) : (
+          <div style={{
+            display: "grid",
+            gap: "1.25rem",
+            gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))",
+          }}>
           {portfolioCompanies.map((company) => (
             <div
               key={company._id}
@@ -184,8 +193,9 @@ export function PortfolioPage({ onSelectCompany, onBack }: PortfolioPageProps) {
               </div>
             </div>
           ))}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

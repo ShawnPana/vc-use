@@ -515,21 +515,9 @@ export const generateSummaries = action({
     // Parse scraped data to extract rich information
     const scrapedData = JSON.parse(args.scrapedData);
 
-    // For founder_story, use the actual founder bios if available
-    const founders = scrapedData.founders || [];
-    const founderBios = founders
-      .map((f: any) => `${f.name}: ${f.bio || 'Bio not available'}`)
-      .join('\n');
-
-    // Only generate founder_story if we have founder information
-    const hasFounderInfo = founders.length > 0 && founderBios.trim().length > 0;
+    // Don't generate founder_story here - it will be generated after deep research enriches the bios
 
     const summaryTypes = [
-      ...(hasFounderInfo ? [{
-        type: "founder_story",
-        prompt: `Based on the following founder information, create a brief, compelling summary of the founders' background and how they came together to start this company. Focus on their unique experiences and complementary skills. 2-3 sentences max.\n\nIMPORTANT: Always create a positive, insightful summary even if biographical information is limited - focus on the team and their potential. If you truly cannot create any summary at all, respond with exactly the word "None" and nothing else. Do NOT return empty strings, quotes, or apologetic messages like "detailed biographies are not available" or "unfortunately". Be confident and forward-looking.\n\nFounder Information:\n${founderBios}`,
-        useDirectData: true,
-      }] : []),
       {
         type: "market_position",
         prompt: "Summarize the company's position in the competitive landscape and their unique differentiation. 2-3 sentences max.",
@@ -699,29 +687,28 @@ export const generateSummariesAsUser = action({
     scrapedData: v.string(),
   },
   handler: async (ctx, args) => {
+    console.log(`[generateSummariesAsUser] Starting for ${args.startupName}`);
+
     const cerebrasApiKey = process.env.CEREBRAS_API_KEY;
     if (!cerebrasApiKey) {
+      console.log(`[generateSummariesAsUser] No Cerebras API key found`);
       return;
     }
 
     // Parse scraped data to extract rich information
     const scrapedData = JSON.parse(args.scrapedData);
 
-    // For founder_story, use the actual founder bios if available
+    // Check if we have enriched founder bios and competitors from deep research
     const founders = scrapedData.founders || [];
-    const founderBios = founders
-      .map((f: any) => `${f.name}: ${f.bio || 'Bio not available'}`)
-      .join('\n');
+    const competitors = scrapedData.competitors || [];
 
-    // Only generate founder_story if we have founder information
-    const hasFounderInfo = founders.length > 0 && founderBios.trim().length > 0;
+    const hasEnrichedFounders = founders.length > 0 && founders.some((f: any) => f.bio && f.bio !== "None" && f.bio.trim().length > 0);
+    const hasEnrichedCompetitors = competitors.length > 0 && competitors.some((c: any) => c.description && c.description.trim().length > 0);
+
+    console.log(`[generateSummariesAsUser] hasEnrichedFounders: ${hasEnrichedFounders}, hasEnrichedCompetitors: ${hasEnrichedCompetitors}`);
+    console.log(`[generateSummariesAsUser] Founders:`, founders.map((f: any) => ({ name: f.name, hasBio: !!f.bio })));
 
     const summaryTypes = [
-      ...(hasFounderInfo ? [{
-        type: "founder_story",
-        prompt: `Based on the following founder information, create a brief, compelling summary of the founders' background and how they came together to start this company. Focus on their unique experiences and complementary skills. 2-3 sentences max.\n\nIMPORTANT: Always create a positive, insightful summary even if biographical information is limited - focus on the team and their potential. If you truly cannot create any summary at all, respond with exactly the word "None" and nothing else. Do NOT return empty strings, quotes, or apologetic messages like "detailed biographies are not available" or "unfortunately". Be confident and forward-looking.\n\nFounder Information:\n${founderBios}`,
-        useDirectData: true,
-      }] : []),
       {
         type: "market_position",
         prompt: "Summarize the company's position in the competitive landscape and their unique differentiation. 2-3 sentences max.",
@@ -737,10 +724,25 @@ export const generateSummariesAsUser = action({
         prompt: `Based on this company data, provide a tight, 2 sentence summary that highlights what they do, who they serve, and why they matter right now.\n\nCompany Bio: ${scrapedData.bio || ''}\nCompany Summary: ${scrapedData.summary || ''}`,
         useDirectData: true,
       },
+      // Only generate founder_story if we have enriched bios from deep research
+      ...(hasEnrichedFounders ? [{
+        type: "founder_story",
+        prompt: `Based on the following enriched founder bios, create a compelling 2-3 sentence summary of the founders' backgrounds and how their unique experiences position them to succeed with this company.\n\nFounders:\n${founders.map((f: any) => `${f.name}: ${f.bio || 'No bio available'}`).join('\n\n')}`,
+        useDirectData: true,
+      }] : []),
+      // Only generate competitive_landscape if we have enriched competitors from deep research
+      ...(hasEnrichedCompetitors ? [{
+        type: "competitive_landscape",
+        prompt: `Based on the following competitor information, create a 2-3 sentence summary of the competitive landscape and how this company differentiates itself.\n\nCompetitors:\n${competitors.map((c: any) => `${c.name}: ${c.description || 'No description'}`).join('\n\n')}`,
+        useDirectData: true,
+      }] : []),
     ];
+
+    console.log(`[generateSummariesAsUser] Will generate ${summaryTypes.length} summaries:`, summaryTypes.map(s => s.type));
 
     for (const summary of summaryTypes) {
       try {
+        console.log(`[generateSummariesAsUser] Generating ${summary.type} summary...`);
         const response = await fetch("https://api.cerebras.ai/v1/chat/completions", {
           method: "POST",
           headers: {
