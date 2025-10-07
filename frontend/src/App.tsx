@@ -362,20 +362,22 @@ function MainApp() {
   const isSummariesLoading = !summaries || summaries.length === 0;
 
   // Use database agents only - no fallback
-  const agentMeta = (dbAgents || []).map((agent) => {
-    const { status, analysis } = getAgentStatus(agent.agentId);
-    const frontendAgent = AGENTS.find((a) => a.id === agent.agentId);
+  const agentMeta = (dbAgents || [])
+    .sort((a, b) => a.order - b.order) // Sort by order to maintain stable positioning
+    .map((agent) => {
+      const { status, analysis } = getAgentStatus(agent.agentId);
+      const frontendAgent = AGENTS.find((a) => a.id === agent.agentId);
 
-    return {
-      id: agent.agentId,
-      name: agent.name,
-      icon: frontendAgent?.icon || Search,
-      accent: agent.accent || "#818cf8",
-      status,
-      analysis,
-      prompt: agent.prompt,
-    };
-  });
+      return {
+        id: agent.agentId,
+        name: agent.name,
+        icon: frontendAgent?.icon || Search,
+        accent: agent.accent || "#818cf8",
+        status,
+        analysis,
+        prompt: agent.prompt,
+      };
+    });
 
   const completedAgents = agentMeta.filter((agent) => agent.status === "completed").length;
   const allAgentsCompleted = completedAgents === agentMeta.length && agentMeta.length > 0;
