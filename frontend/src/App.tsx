@@ -229,10 +229,9 @@ function MainApp() {
   const competitors = parsedScrapedData?.competitors || [];
   const hasCompetitors = competitors.length > 0;
 
-  // Derived loading states based on data presence
-  const hasFounders = parsedScrapedData?.founders && parsedScrapedData.founders.length > 0;
-  const isEnrichingFounders = hasFounders && parsedScrapedData.founders.some((f: any) => !f.bio || f.bio === "None");
-  const isDeepResearching = (isAnalyzing || isRerunning) && hasFounders && !hasCompetitors;
+  // Loading states for founder story and competitive landscape
+  const [isDeepResearching, setIsDeepResearching] = useState(false);
+  const [isEnrichingFounders, setIsEnrichingFounders] = useState(false);
 
   const recentNewsItems = useMemo(() => {
     if (!hypeRecentNews) {
