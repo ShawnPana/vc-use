@@ -81,7 +81,9 @@ def full_analysis_task(self, company_name: str, callback_url: str = None, api_ke
             }
 
         finally:
-            loop.close()
+            # Don't close the loop - let it be garbage collected
+            # Closing causes "Event loop is closed" errors in worker process reuse
+            pass
 
     except Exception as e:
         print(f"❌ [Celery Task {self.request.id}] Error in full analysis for {company_name}: {e}")
@@ -203,7 +205,9 @@ def deep_research_task(
             }
 
         finally:
-            loop.close()
+            # Don't close the loop - let it be garbage collected
+            # Closing causes "Event loop is closed" errors in worker process reuse
+            pass
 
     except Exception as e:
         print(f"❌ [Celery Task {self.request.id}] Error in deep research for {company_name}: {e}")
