@@ -146,13 +146,6 @@ export const storeScrapedData = mutation({
   args: {
     startupName: v.string(),
     data: v.string(),
-    taskId: v.optional(v.string()),
-    taskStatus: v.optional(v.union(
-      v.literal("queued"),
-      v.literal("processing"),
-      v.literal("completed"),
-      v.literal("failed")
-    )),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -165,74 +158,20 @@ export const storeScrapedData = mutation({
       .withIndex("by_user_and_startup", (q) => q.eq("userId", userId).eq("startupName", args.startupName))
       .first();
 
-    const updateData: any = {
-      data: args.data,
-      timestamp: Date.now(),
-    };
-
-    if (args.taskId !== undefined) {
-      updateData.taskId = args.taskId;
-    }
-    if (args.taskStatus !== undefined) {
-      updateData.taskStatus = args.taskStatus;
-      updateData.taskUpdatedAt = Date.now();
-    }
-
     if (existing) {
-      await ctx.db.patch(existing._id, updateData);
+      await ctx.db.patch(existing._id, {
+        data: args.data,
+        timestamp: Date.now(),
+      });
       return existing._id;
     }
 
     return await ctx.db.insert("scrapedData", {
       userId,
       startupName: args.startupName,
-      ...updateData,
+      data: args.data,
+      timestamp: Date.now(),
     });
-  },
-});
-
-export const updateTaskStatus = mutation({
-  args: {
-    startupName: v.string(),
-    taskId: v.optional(v.string()),
-    taskStatus: v.union(
-      v.literal("queued"),
-      v.literal("processing"),
-      v.literal("completed"),
-      v.literal("failed")
-    ),
-  },
-  handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (userId === null) {
-      throw new Error("User must be authenticated");
-    }
-
-    const existing = await ctx.db
-      .query("scrapedData")
-      .withIndex("by_user_and_startup", (q) => q.eq("userId", userId).eq("startupName", args.startupName))
-      .first();
-
-    if (!existing) {
-      // Create a placeholder entry if it doesn't exist
-      return await ctx.db.insert("scrapedData", {
-        userId,
-        startupName: args.startupName,
-        data: "",
-        timestamp: Date.now(),
-        taskId: args.taskId,
-        taskStatus: args.taskStatus,
-        taskUpdatedAt: Date.now(),
-      });
-    }
-
-    await ctx.db.patch(existing._id, {
-      taskId: args.taskId,
-      taskStatus: args.taskStatus,
-      taskUpdatedAt: Date.now(),
-    });
-
-    return existing._id;
   },
 });
 

@@ -32,18 +32,6 @@ def full_analysis_task(self, company_name: str, callback_url: str = None, api_ke
             loop.run_until_complete(browser1.stop())
             loop.run_until_complete(browser2.stop())
 
-            # Give background tasks time to finish cleanup
-            loop.run_until_complete(asyncio.sleep(1))
-
-            # Cancel any remaining tasks
-            pending = asyncio.all_tasks(loop)
-            for task in pending:
-                task.cancel()
-
-            # Wait for cancellations to complete
-            if pending:
-                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-
             print(f"✅ [Celery Task {self.request.id}] Completed scraping for: {company_name}")
 
             # Convert to dict for JSON serialization
@@ -61,8 +49,7 @@ def full_analysis_task(self, company_name: str, callback_url: str = None, api_ke
                             json={
                                 "startupName": company_name,
                                 "company": result["company"],
-                                "hype": result["hype"],
-                                "taskStatus": "completed"
+                                "hype": result["hype"]
                             },
                             headers={
                                 "Content-Type": "application/json",
@@ -81,39 +68,11 @@ def full_analysis_task(self, company_name: str, callback_url: str = None, api_ke
             }
 
         finally:
-            # Don't close the loop - let it be garbage collected
-            # Closing causes "Event loop is closed" errors in worker process reuse
-            pass
+            loop.close()
 
     except Exception as e:
         print(f"❌ [Celery Task {self.request.id}] Error in full analysis for {company_name}: {e}")
-
-        # Check if we've exhausted retries
-        if self.request.retries >= self.max_retries:
-            print(f"❌ [Celery Task {self.request.id}] Max retries reached, sending failure callback")
-            # Send failure callback if we've exhausted retries
-            if callback_url:
-                try:
-                    with httpx.Client(timeout=30.0) as client:
-                        client.post(
-                            callback_url,
-                            json={
-                                "startupName": company_name,
-                                "taskStatus": "failed",
-                                "error": str(e)
-                            },
-                            headers={
-                                "Content-Type": "application/json",
-                                "X-API-Key": api_key
-                            } if api_key else {"Content-Type": "application/json"}
-                        )
-                    print(f"✅ [Celery Task {self.request.id}] Sent failure callback")
-                except Exception as callback_error:
-                    print(f"⚠️ [Celery Task {self.request.id}] Failed to send failure callback: {callback_error}")
-            # Don't retry anymore
-            raise e
-
-        # Retry the task if we haven't exhausted retries
+        # Retry the task if it fails
         raise self.retry(exc=e)
 
 
@@ -156,18 +115,6 @@ def deep_research_task(
             loop.run_until_complete(browser1.stop())
             loop.run_until_complete(browser2.stop())
 
-            # Give background tasks time to finish cleanup
-            loop.run_until_complete(asyncio.sleep(1))
-
-            # Cancel any remaining tasks
-            pending = asyncio.all_tasks(loop)
-            for task in pending:
-                task.cancel()
-
-            # Wait for cancellations to complete
-            if pending:
-                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-
             print(f"✅ [Celery Task {self.request.id}] Completed deep research for: {company_name}")
 
             # Convert to dict for JSON serialization
@@ -185,8 +132,7 @@ def deep_research_task(
                             json={
                                 "startupName": company_name,
                                 "founders": result["founders"],
-                                "competitors": result["competitors"],
-                                "taskStatus": "completed"
+                                "competitors": result["competitors"]
                             },
                             headers={
                                 "Content-Type": "application/json",
@@ -205,37 +151,9 @@ def deep_research_task(
             }
 
         finally:
-            # Don't close the loop - let it be garbage collected
-            # Closing causes "Event loop is closed" errors in worker process reuse
-            pass
+            loop.close()
 
     except Exception as e:
         print(f"❌ [Celery Task {self.request.id}] Error in deep research for {company_name}: {e}")
-
-        # Check if we've exhausted retries
-        if self.request.retries >= self.max_retries:
-            print(f"❌ [Celery Task {self.request.id}] Max retries reached, sending failure callback")
-            # Send failure callback if we've exhausted retries
-            if callback_url:
-                try:
-                    with httpx.Client(timeout=30.0) as client:
-                        client.post(
-                            callback_url,
-                            json={
-                                "startupName": company_name,
-                                "taskStatus": "failed",
-                                "error": str(e)
-                            },
-                            headers={
-                                "Content-Type": "application/json",
-                                "X-API-Key": api_key
-                            } if api_key else {"Content-Type": "application/json"}
-                        )
-                    print(f"✅ [Celery Task {self.request.id}] Sent failure callback")
-                except Exception as callback_error:
-                    print(f"⚠️ [Celery Task {self.request.id}] Failed to send failure callback: {callback_error}")
-            # Don't retry anymore
-            raise e
-
-        # Retry the task if we haven't exhausted retries
+        # Retry the task if it fails
         raise self.retry(exc=e)
