@@ -17,6 +17,7 @@ import type * as actions from "../actions.js";
 import type * as auth from "../auth.js";
 import type * as http from "../http.js";
 import type * as migrateUserIds from "../migrateUserIds.js";
+import type * as migrations_addTaskFieldsToScrapedData from "../migrations/addTaskFieldsToScrapedData.js";
 import type * as migrations from "../migrations.js";
 import type * as mutations from "../mutations.js";
 import type * as queries from "../queries.js";
@@ -34,6 +35,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   http: typeof http;
   migrateUserIds: typeof migrateUserIds;
+  "migrations/addTaskFieldsToScrapedData": typeof migrations_addTaskFieldsToScrapedData;
   migrations: typeof migrations;
   mutations: typeof mutations;
   queries: typeof queries;

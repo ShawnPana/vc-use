@@ -30,6 +30,9 @@ export default defineSchema({
     startupName: v.string(),
     data: v.string(),
     timestamp: v.number(),
+    taskId: v.optional(v.string()),
+    taskStatus: v.optional(v.string()),
+    taskUpdatedAt: v.optional(v.number()),
   }).index("by_user_and_startup", ["userId", "startupName"]),
 
   agents: defineTable({
