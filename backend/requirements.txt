@@ -5,5 +5,3 @@ fastapi
 pydantic
 psutil
 httpx
-celery[redis]
-redis
